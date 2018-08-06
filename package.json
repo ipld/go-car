@@ -1,0 +1,24 @@
+{
+  "author": "why",
+  "bugs": {
+    "url": "https://github.com/ipfs/go-car"
+  },
+  "gx": {
+    "dvcsimport": "github.com/ipfs/go-car"
+  },
+  "gxDependencies": [
+    {
+      "author": "why",
+      "hash": "Qma2BR57Wqp8w9vPreK4dEzoXXk8DFFRL3LresMZg4QpzN",
+      "name": "go-merkledag",
+      "version": "1.0.2"
+    }
+  ],
+  "gxVersion": "0.12.1",
+  "language": "go",
+  "license": "",
+  "name": "go-car",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.0.0"
+}
+
