@@ -2,6 +2,7 @@ package car
 
 import (
 	"archive/tar"
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -36,8 +37,20 @@ func WriteCar(ctx context.Context, ds format.DAGService, root *cid.Cid, w io.Wri
 	return tw.Flush()
 }
 
+var CarV0Prefix = []byte{'r', 'o', 'o', 't', 0, 0, 0, 0}
+
 func LoadCar(ctx context.Context, bs bstore.Blockstore, r io.Reader) (*cid.Cid, error) {
-	tr := tar.NewReader(r)
+	br := bufio.NewReaderSize(r, 1024)
+	header, err := br.Peek(8)
+	if err != nil {
+		return nil, err
+	}
+
+	if !bytes.Equal(CarV0Prefix, header) {
+		return nil, fmt.Errorf("invalid CAR format, must be prefixed with 'root\\0\\0\\0\\0'")
+	}
+
+	tr := tar.NewReader(br)
 	root, err := tr.Next()
 	if err != nil {
 		return nil, err
