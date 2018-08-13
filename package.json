@@ -12,6 +12,12 @@
       "hash": "QmeCaeBmCCEJrZahwXY4G2G8zRaNBWskrfKWoQ6Xv6c1DR",
       "name": "go-merkledag",
       "version": "1.0.3"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmSyK1ZiAP98YvnxsTfQpb669V2xeTHRbG4Y6fgKS3vVSd",
+      "name": "go-ipld-cbor",
+      "version": "1.4.6"
     }
   ],
   "gxVersion": "0.12.1",
@@ -19,6 +25,6 @@
   "license": "",
   "name": "go-car",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.0.1"
+  "version": "1.1.0"
 }
 
