@@ -15,9 +15,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmSyK1ZiAP98YvnxsTfQpb669V2xeTHRbG4Y6fgKS3vVSd",
+      "hash": "QmPbqRavwDZLfmpeW6eoyAoQ5rT2LoCW98JhvRc22CqkZS",
       "name": "go-ipld-cbor",
-      "version": "1.4.6"
+      "version": "1.4.7"
     }
   ],
   "gxVersion": "0.12.1",
@@ -25,6 +25,6 @@
   "license": "",
   "name": "go-car",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.1.0"
+  "version": "1.1.1"
 }
 
