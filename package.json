@@ -9,15 +9,33 @@
   "gxDependencies": [
     {
       "author": "why",
-      "hash": "QmeCaeBmCCEJrZahwXY4G2G8zRaNBWskrfKWoQ6Xv6c1DR",
+      "hash": "QmRiQCJZ91B7VNmLvA6sxzDuBJGSojS3uXHHVuNr3iueNZ",
       "name": "go-merkledag",
-      "version": "1.0.3"
+      "version": "1.0.10"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmPbqRavwDZLfmpeW6eoyAoQ5rT2LoCW98JhvRc22CqkZS",
+      "hash": "QmV6BQ6fFCf9eFHDuRxvguvqfKLZtZrxthgZvDfRCs4tMN",
       "name": "go-ipld-cbor",
-      "version": "1.4.7"
+      "version": "1.4.8"
+    },
+    {
+      "author": "hsanjuan",
+      "hash": "QmcmpX42gtDv1fz24kau4wjS9hfwWj5VexWBKgGnWzsyag",
+      "name": "go-ipfs-blockstore",
+      "version": "0.0.18"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZFbDTY9jfSBms2MchvYM9oYRbAF19K7Pby47yDBfpPrb",
+      "name": "go-cid",
+      "version": "0.8.0"
+    },
+    {
+      "author": "stebalien",
+      "hash": "QmWAzSEoqZ6xU6pu8yL8e5WaMb7wtbfbhhN4p1DknUPtr3",
+      "name": "go-block-format",
+      "version": "0.1.11"
     }
   ],
   "gxVersion": "0.12.1",
