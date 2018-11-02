@@ -9,15 +9,15 @@
   "gxDependencies": [
     {
       "author": "why",
-      "hash": "Qme5GzTW4GnFhFTteygYKJ8fySUusoVMBe6Pm41reh5qAr",
+      "hash": "QmXyuFW7at4r9dxRAbrPU9JpHW5aqngAFyxvyhvYjzxRKS",
       "name": "go-merkledag",
-      "version": "1.1.16"
+      "version": "1.1.17"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmXkBdWGa9kZaVUsk6863T8bZkynwwL8UUB1EMZtz7dN5E",
+      "hash": "QmfVWZztCxyZuS5NDBV1JpmUJiNQKD1MEnbWbqTTzZLyP7",
       "name": "go-ipld-cbor",
-      "version": "1.5.5"
+      "version": "1.5.6"
     },
     {
       "author": "hsanjuan",
@@ -43,6 +43,6 @@
   "license": "",
   "name": "go-car",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.1.7"
+  "version": "1.1.8"
 }
 
