@@ -9,33 +9,33 @@
   "gxDependencies": [
     {
       "author": "why",
-      "hash": "QmXyuFW7at4r9dxRAbrPU9JpHW5aqngAFyxvyhvYjzxRKS",
+      "hash": "QmdURv6Sbob8TVW2tFFve9vcEWrSUgwPqeqnXyvYhLrkyd",
       "name": "go-merkledag",
-      "version": "1.1.17"
+      "version": "1.1.23"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmfVWZztCxyZuS5NDBV1JpmUJiNQKD1MEnbWbqTTzZLyP7",
+      "hash": "QmRoARq3nkUb13HSKZGepCZSWe5GrVPwx7xURJGZ7KWv9V",
       "name": "go-ipld-cbor",
-      "version": "1.5.6"
+      "version": "1.5.7"
     },
     {
       "author": "hsanjuan",
-      "hash": "QmcDDgAXDbpDUpadCJKLr49KYR4HuL7T8Z1dZTHt6ixsoR",
+      "hash": "QmS2aqUZLJp8kF1ihE5rvDGE5LvmKDPnx32w9Z1BW9xLV5",
       "name": "go-ipfs-blockstore",
-      "version": "0.1.4"
+      "version": "0.1.6"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7",
+      "hash": "QmR8BauakNcBa3RbE4nbQu76PDiJgoQgz8AJdhJuiU4TAw",
       "name": "go-cid",
-      "version": "0.9.0"
+      "version": "0.9.1"
     },
     {
       "author": "stebalien",
-      "hash": "QmRcHuYzAyswytBuMF78rj3LTChYszomRFXNg4685ZN1WM",
+      "hash": "QmWoXtvgC8inqFkAATB7cp2Dax7XBi9VDvSg9RCCZufmRk",
       "name": "go-block-format",
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ],
   "gxVersion": "0.12.1",
@@ -43,6 +43,6 @@
   "license": "",
   "name": "go-car",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.1.8"
+  "version": "1.1.9"
 }
 
