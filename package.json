@@ -9,21 +9,21 @@
   "gxDependencies": [
     {
       "author": "why",
-      "hash": "QmdV35UHnL1FM52baPkeUo6u7Fxm2CRUkPTLRPxeF8a4Ap",
+      "hash": "QmNRAuGmvnVw8urHkUZQirhu42VTiZjVWASa2aTznEMmpP",
       "name": "go-merkledag",
-      "version": "1.1.24"
+      "version": "1.1.33"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmRoARq3nkUb13HSKZGepCZSWe5GrVPwx7xURJGZ7KWv9V",
+      "hash": "QmcZLyosDwMKdB6NLRsiss9HXzDPhVhhRtPy67JFKTDQDX",
       "name": "go-ipld-cbor",
-      "version": "1.5.7"
+      "version": "1.5.9"
     },
     {
       "author": "hsanjuan",
-      "hash": "QmS2aqUZLJp8kF1ihE5rvDGE5LvmKDPnx32w9Z1BW9xLV5",
+      "hash": "QmRu7tiRnFk9mMPpVECQTBQJqXtmG132jJxA1w9A7TtpBz",
       "name": "go-ipfs-blockstore",
-      "version": "0.1.6"
+      "version": "0.1.7"
     },
     {
       "author": "whyrusleeping",
@@ -43,5 +43,6 @@
   "license": "",
   "name": "go-car",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.1.10"
+  "version": "1.1.11"
 }
+
