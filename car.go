@@ -30,7 +30,7 @@ type carWriter struct {
 	w  io.Writer
 }
 
-func WriteCar(ctx context.Context, ds format.DAGService, roots []cid.Cid, w io.Writer) error {
+func WriteCarIgnoreSet(ctx context.Context, ds format.DAGService, roots []cid.Cid, ignore *cid.Set, w io.Writer) error {
 	cw := &carWriter{ds: ds, w: w}
 
 	h := &CarHeader{
@@ -42,13 +42,17 @@ func WriteCar(ctx context.Context, ds format.DAGService, roots []cid.Cid, w io.W
 		return fmt.Errorf("failed to write car header: %s", err)
 	}
 
-	seen := cid.NewSet()
+	seen := ignore
 	for _, r := range roots {
 		if err := dag.EnumerateChildren(ctx, cw.enumGetLinks, r, seen.Visit); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func WriteCar(ctx context.Context, ds format.DAGService, roots []cid.Cid, w io.Writer) error {
+	return WriteCarIgnoreSet(ctx, ds, roots, cid.NewSet(), w)
 }
 
 func ReadHeader(br *bufio.Reader) (*CarHeader, error) {
