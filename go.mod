@@ -19,6 +19,7 @@ require (
 	github.com/libp2p/go-libp2p-routing v0.0.1 // indirect
 	github.com/libp2p/go-libp2p-transport v0.0.4 // indirect
 	github.com/multiformats/go-multihash v0.0.5
+	github.com/stretchr/testify v1.3.0
 	github.com/urfave/cli v1.20.0
 	github.com/whyrusleeping/go-smux-multiplex v3.0.16+incompatible // indirect
 	github.com/whyrusleeping/go-smux-multistream v2.0.2+incompatible // indirect
