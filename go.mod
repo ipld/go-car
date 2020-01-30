@@ -9,6 +9,7 @@ require (
 	github.com/ipld/go-ipld-prime v0.0.2-0.20191108012745-28a82f04c785
 	github.com/ipld/go-ipld-prime-proto v0.0.0-20191113031812-e32bd156a1e5
 	github.com/multiformats/go-multihash v0.0.5
+	github.com/stretchr/testify v1.3.0
 	github.com/urfave/cli v1.20.0
 )
 
