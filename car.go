@@ -33,18 +33,19 @@ type CarHeader struct {
 }
 
 type carWriter struct {
-	ds   format.DAGService
-	w    io.Writer
-	walk WalkFunc
+	ds     format.DAGService
+	w      io.Writer
+	walk   WalkFunc
+	ignore *cid.Set
 }
 
 type WalkFunc func(format.Node) ([]*format.Link, error)
 
-func WriteCar(ctx context.Context, ds format.DAGService, roots []cid.Cid, w io.Writer) error {
-	return WriteCarWithWalker(ctx, ds, roots, w, DefaultWalkFunc)
+func WriteCar(ctx context.Context, ds format.DAGService, roots []cid.Cid, ignore *cid.Set, w io.Writer) error {
+	return WriteCarWithWalker(ctx, ds, roots, ignore, w, DefaultWalkFunc)
 }
 
-func WriteCarWithWalker(ctx context.Context, ds format.DAGService, roots []cid.Cid, w io.Writer, walk WalkFunc) error {
+func WriteCarWithWalker(ctx context.Context, ds format.DAGService, roots []cid.Cid, ignore *cid.Set, w io.Writer, walk WalkFunc) error {
 
 	h := &CarHeader{
 		Roots:   roots,
@@ -55,7 +56,7 @@ func WriteCarWithWalker(ctx context.Context, ds format.DAGService, roots []cid.C
 		return fmt.Errorf("failed to write car header: %s", err)
 	}
 
-	cw := &carWriter{ds: ds, w: w, walk: walk}
+	cw := &carWriter{ds: ds, w: w, walk: walk, ignore: ignore}
 	seen := cid.NewSet()
 	for _, r := range roots {
 		if err := dag.Walk(ctx, cw.enumGetLinks, r, seen.Visit); err != nil {
@@ -111,7 +112,16 @@ func (cw *carWriter) enumGetLinks(ctx context.Context, c cid.Cid) ([]*format.Lin
 		return nil, err
 	}
 
-	return nd.Links(), nil
+	links := nd.Links()
+	var filteredLinks []*format.Link
+	for _, l := range links {
+		if cw.ignore.Has(l.Cid) {
+			continue
+		}
+		filteredLinks = append(filteredLinks, l)
+	}
+
+	return filteredLinks, nil
 }
 
 func (cw *carWriter) writeNode(ctx context.Context, nd format.Node) error {
