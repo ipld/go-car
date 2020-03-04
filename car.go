@@ -5,9 +5,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
+	files "github.com/ipfs/go-ipfs-files"
+	posinfo "github.com/ipfs/go-ipfs-posinfo"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-merkledag"
@@ -69,18 +72,18 @@ func DefaultWalkFunc(nd format.Node) ([]*format.Link, error) {
 	return nd.Links(), nil
 }
 
-func ReadHeader(br *bufio.Reader) (*CarHeader, error) {
-	hb, err := util.LdRead(br)
+func ReadHeader(br *bufio.Reader) (*CarHeader, uint64, error) {
+	hb, l, err := util.LdRead(br)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var ch CarHeader
 	if err := cbor.DecodeInto(hb, &ch); err != nil {
-		return nil, fmt.Errorf("invalid header: %v", err)
+		return nil, 0, fmt.Errorf("invalid header: %v", err)
 	}
 
-	return &ch, nil
+	return &ch, l, nil
 }
 
 func WriteHeader(h *CarHeader, w io.Writer) error {
@@ -119,13 +122,16 @@ func (cw *carWriter) writeNode(ctx context.Context, nd format.Node) error {
 }
 
 type CarReader struct {
-	br     *bufio.Reader
-	Header *CarHeader
+	br       *bufio.Reader
+	offset   uint64
+	fullPath string
+	stat     os.FileInfo
+	Header   *CarHeader
 }
 
 func NewCarReader(r io.Reader) (*CarReader, error) {
 	br := bufio.NewReader(r)
-	ch, err := ReadHeader(br)
+	ch, offset, err := ReadHeader(br)
 	if err != nil {
 		return nil, err
 	}
@@ -138,14 +144,20 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 		return nil, fmt.Errorf("empty car, no roots")
 	}
 
-	return &CarReader{
+	cr := &CarReader{
 		br:     br,
+		offset: offset,
 		Header: ch,
-	}, nil
+	}
+	if fi, ok := r.(files.FileInfo); ok {
+		cr.fullPath = fi.AbsPath()
+		cr.stat = fi.Stat()
+	}
+	return cr, nil
 }
 
 func (cr *CarReader) Next() (blocks.Block, error) {
-	c, data, err := util.ReadNode(cr.br)
+	c, l, data, err := util.ReadNode(cr.br)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +171,25 @@ func (cr *CarReader) Next() (blocks.Block, error) {
 		return nil, fmt.Errorf("mismatch in content integrity, name: %s, data: %s", c, hashed)
 	}
 
-	return blocks.NewBlockWithCid(data, c)
+	offset := cr.offset + l - uint64(len(data))
+	cr.offset += l
+
+	blk, err := blocks.NewBlockWithCid(data, c)
+	if cr.fullPath == "" {
+		return blk, err
+	}
+	nd, err := format.Decode(blk)
+	if err != nil {
+		return nil, err
+	}
+	return &posinfo.FilestoreNode{
+		Node: nd,
+		PosInfo: &posinfo.PosInfo{
+			Offset:   offset,
+			FullPath: cr.fullPath,
+			Stat:     cr.stat,
+		},
+	}, nil
 }
 
 type batchStore interface {
