@@ -52,18 +52,19 @@ func ReadCid(buf []byte) (cid.Cid, int, error) {
 	return cid.NewCidV1(codec, h), len(buf) - br.Len(), nil
 }
 
-func ReadNode(br *bufio.Reader) (cid.Cid, []byte, error) {
-	data, err := LdRead(br)
+func ReadNode(br *bufio.Reader) (cid.Cid, uint64, []byte, error) {
+	data, l, err := LdRead(br)
+
 	if err != nil {
-		return cid.Cid{}, nil, err
+		return cid.Cid{}, 0, nil, err
 	}
 
 	c, n, err := ReadCid(data)
 	if err != nil {
-		return cid.Cid{}, nil, err
+		return cid.Cid{}, 0, nil, err
 	}
 
-	return c, data[n:], nil
+	return c, l, data[n:], nil
 }
 
 func LdWrite(w io.Writer, d ...[]byte) error {
@@ -99,16 +100,20 @@ func LdSize(d ...[]byte) uint64 {
 	return sum + uint64(n)
 }
 
-func LdRead(r *bufio.Reader) ([]byte, error) {
+func LdRead(r *bufio.Reader) ([]byte, uint64, error) {
 	l, err := binary.ReadUvarint(r)
+
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	buf := make([]byte, l)
 	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return buf, nil
+	ubuf := make([]byte, 8)
+	n := binary.PutUvarint(ubuf, l)
+
+	return buf, l + uint64(n), nil
 }

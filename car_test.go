@@ -3,9 +3,18 @@ package car
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
+	bsrv "github.com/ipfs/go-blockservice"
 	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
+	dssync "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/go-filestore"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	files "github.com/ipfs/go-ipfs-files"
 	format "github.com/ipfs/go-ipld-format"
 	dag "github.com/ipfs/go-merkledag"
 	dstest "github.com/ipfs/go-merkledag/test"
@@ -74,6 +83,83 @@ func TestRoundtrip(t *testing.T) {
 	}
 }
 
+func TestRoundtripFilestore(t *testing.T) {
+	dserv := dstest.Mock()
+	a := dag.NewRawNode([]byte("aaaa"))
+	b := dag.NewRawNode([]byte("bbbb"))
+	c := dag.NewRawNode([]byte("cccc"))
+
+	nd1 := &dag.ProtoNode{}
+	nd1.AddNodeLink("cat", a)
+
+	nd2 := &dag.ProtoNode{}
+	nd2.AddNodeLink("first", nd1)
+	nd2.AddNodeLink("dog", b)
+
+	nd3 := &dag.ProtoNode{}
+	nd3.AddNodeLink("second", nd2)
+	nd3.AddNodeLink("bear", c)
+
+	assertAddNodes(t, dserv, a, b, c, nd1, nd2, nd3)
+
+	os.Mkdir("_test", 0755)
+	f, err := os.OpenFile("_test/sample.car", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+
+	err = WriteCar(context.Background(), dserv, []cid.Cid{nd3.Cid()}, f)
+	require.NoError(t, err)
+
+	err = f.Close()
+	require.NoError(t, err)
+
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
+	bs := dstest.Bserv().Blockstore()
+	pwd, err := os.Getwd()
+	require.NoError(t, err)
+	fm := filestore.NewFileManager(ds, pwd)
+	fm.AllowFiles = true
+	fs := filestore.NewFilestore(bs, fm)
+
+	f, err = os.Open("_test/sample.car")
+	require.NoError(t, err)
+
+	stat, err := f.Stat()
+	require.NoError(t, err)
+
+	path, err := filepath.Abs("_test/sample.car")
+	require.NoError(t, err)
+
+	rf, err := files.NewReaderPathFile(path, f, stat)
+	require.NoError(t, err)
+
+	_, err = LoadCar(fs, rf)
+	require.NoError(t, err)
+
+	err = f.Close()
+	require.NoError(t, err)
+
+	for _, nd := range []format.Node{a, b, c, nd1, nd2, nd3} {
+		has, err := bs.Has(nd.Cid())
+		require.NoError(t, err)
+		require.False(t, has)
+
+		has, err = fs.Has(nd.Cid())
+		require.NoError(t, err)
+		require.True(t, has)
+	}
+	newDserv := dag.NewDAGService(bsrv.New(fs, offline.Exchange(fs)))
+	buf := new(bytes.Buffer)
+	err = WriteCar(context.Background(), newDserv, []cid.Cid{nd3.Cid()}, buf)
+	require.NoError(t, err)
+
+	f, err = os.Open("_test/sample.car")
+	require.NoError(t, err)
+
+	fileBytes, err := ioutil.ReadAll(f)
+	require.NoError(t, err)
+
+	require.True(t, bytes.Equal(fileBytes, buf.Bytes()))
+}
 func TestRoundtripSelective(t *testing.T) {
 	sourceBserv := dstest.Bserv()
 	sourceBs := sourceBserv.Blockstore()
