@@ -59,6 +59,10 @@ func ReadNode(br *bufio.Reader) (cid.Cid, uint64, []byte, error) {
 		return cid.Cid{}, 0, nil, err
 	}
 
+	if len(data) == 0 {
+		return cid.Undef, l, nil, io.EOF // null-padded file
+	}
+
 	c, n, err := ReadCid(data)
 	if err != nil {
 		return cid.Cid{}, 0, nil, err

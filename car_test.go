@@ -83,6 +83,46 @@ func TestRoundtrip(t *testing.T) {
 	}
 }
 
+func TestRoundtripNullPadded(t *testing.T) {
+	dserv := dstest.Mock()
+	a := dag.NewRawNode([]byte("aaaa"))
+
+	assertAddNodes(t, dserv, a)
+
+	buf := new(bytes.Buffer)
+	if err := WriteCar(context.Background(), dserv, []cid.Cid{a.Cid()}, buf); err != nil {
+		t.Fatal(err)
+	}
+
+	buf.Write([]byte{0, 0, 0, 0, 0})
+
+	bserv := dstest.Bserv()
+	ch, err := LoadCar(bserv.Blockstore(), buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ch.Roots) != 1 {
+		t.Fatal("should have one root")
+	}
+
+	if !ch.Roots[0].Equals(a.Cid()) {
+		t.Fatal("got wrong cid")
+	}
+
+	bs := bserv.Blockstore()
+	for _, nd := range []format.Node{a} {
+		has, err := bs.Has(nd.Cid())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !has {
+			t.Fatal("should have cid in blockstore")
+		}
+	}
+}
+
 func TestRoundtripFilestore(t *testing.T) {
 	dserv := dstest.Mock()
 	a := dag.NewRawNode([]byte("aaaa"))
