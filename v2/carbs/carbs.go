@@ -27,7 +27,7 @@ type Carbs struct {
 var _ bs.Blockstore = (*Carbs)(nil)
 
 func (c *Carbs) Read(idx int64) ([]byte, error) {
-	_, bytes, err := util.ReadNode(bufio.NewReader(unatreader{c.backing, idx}))
+	_, bytes, err := util.ReadNode(bufio.NewReader(&unatreader{c.backing, idx}))
 	return bytes, err
 }
 
@@ -61,7 +61,7 @@ func (c *Carbs) GetSize(key cid.Cid) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("not found")
 	}
-	len, err := binary.ReadUvarint(unatreader{c.backing, int64(idx)})
+	len, err := binary.ReadUvarint(&unatreader{c.backing, int64(idx)})
 	return int(len), err
 }
 
@@ -145,9 +145,9 @@ func (c carbsIndex) Unmarshal(path string) error {
 }
 
 func generateIndex(store io.ReaderAt) (*carbsIndex, error) {
-	header, err := car.ReadHeader(bufio.NewReader(unatreader{store, 0}))
+	header, err := car.ReadHeader(bufio.NewReader(&unatreader{store, 0}))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error reading car header: %w", err)
 	}
 	offset, err := car.HeaderSize(header)
 	if err != nil {
@@ -160,7 +160,7 @@ func generateIndex(store io.ReaderAt) (*carbsIndex, error) {
 	rdr := unatreader{store, int64(offset)}
 	for true {
 		thisItemIdx := rdr.at
-		l, err := binary.ReadUvarint(rdr)
+		l, err := binary.ReadUvarint(&rdr)
 		thisItemForNxt := rdr.at
 		if err != nil {
 			if err == io.EOF {
