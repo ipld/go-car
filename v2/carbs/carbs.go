@@ -2,26 +2,26 @@ package carbs
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	bs "github.com/ipfs/go-ipfs-blockstore"
+	"github.com/multiformats/go-multihash"
 
 	car "github.com/ipld/go-car"
 	"github.com/ipld/go-car/util"
-	cbor "github.com/whyrusleeping/cbor/go"
 	"golang.org/x/exp/mmap"
 )
 
 // Carbs provides a read-only Car Block Store.
 type Carbs struct {
 	backing io.ReaderAt
-	idx     *carbsIndex
+	idx     Index
 }
 
 var _ bs.Blockstore = (*Carbs)(nil)
@@ -38,17 +38,64 @@ func (c *Carbs) DeleteBlock(_ cid.Cid) error {
 
 // Has indicates if the store has a cid
 func (c *Carbs) Has(key cid.Cid) (bool, error) {
-	_, ok := (*(c.idx))[key]
-	return ok, nil
+	offset := c.idx.Get(key)
+	len, err := binary.ReadUvarint(&unatreader{c.backing, int64(offset)})
+	if err != nil {
+		return false, err
+	}
+	cid, _, err := readCid(c.backing, int64(offset+len))
+	if err != nil {
+		return false, err
+	}
+	return cid.Equals(key), nil
+}
+
+var cidv0Pref = []byte{0x12, 0x20}
+
+func readCid(store io.ReaderAt, at int64) (cid.Cid, int, error) {
+	var tag [2]byte
+	if _, err := store.ReadAt(tag[:], at); err != nil {
+		return cid.Undef, 0, err
+	}
+	if bytes.Equal(tag[:], cidv0Pref) {
+		cid0 := make([]byte, 34)
+		if _, err := store.ReadAt(cid0, at); err != nil {
+			return cid.Undef, 0, err
+		}
+		c, err := cid.Cast(cid0)
+		return c, 34, err
+	}
+
+	// assume cidv1
+	br := &unatreader{store, at}
+	vers, err := binary.ReadUvarint(br)
+	if err != nil {
+		return cid.Cid{}, 0, err
+	}
+
+	// TODO: the go-cid package allows version 0 here as well
+	if vers != 1 {
+		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number")
+	}
+
+	codec, err := binary.ReadUvarint(br)
+	if err != nil {
+		return cid.Cid{}, 0, err
+	}
+
+	mhr := multihash.NewReader(br)
+	h, err := mhr.ReadMultihash()
+	if err != nil {
+		return cid.Cid{}, 0, err
+	}
+
+	return cid.NewCidV1(codec, h), int(br.at - at), nil
 }
 
 // Get gets a block from the store
 func (c *Carbs) Get(key cid.Cid) (blocks.Block, error) {
-	idx, ok := (*(c.idx))[key]
-	if !ok {
-		return nil, fmt.Errorf("no found")
-	}
-	bytes, err := c.Read(idx)
+	offset := c.idx.Get(key)
+	bytes, err := c.Read(int64(offset))
 	if err != nil {
 		return nil, err
 	}
@@ -57,11 +104,19 @@ func (c *Carbs) Get(key cid.Cid) (blocks.Block, error) {
 
 // GetSize gets how big a item is
 func (c *Carbs) GetSize(key cid.Cid) (int, error) {
-	idx, ok := (*(c.idx))[key]
-	if !ok {
-		return 0, fmt.Errorf("not found")
-	}
+	idx := c.idx.Get(key)
 	len, err := binary.ReadUvarint(&unatreader{c.backing, int64(idx)})
+	if err != nil {
+		return 0, err
+	}
+	cid, _, err := readCid(c.backing, int64(idx+len))
+	if err != nil {
+		return 0, err
+	}
+	if !cid.Equals(key) {
+		return 0, fmt.Errorf("Not found: %s", key)
+	}
+	// get cid. validate.
 	return int(len), err
 }
 
@@ -77,12 +132,34 @@ func (c *Carbs) PutMany([]blocks.Block) error {
 
 // AllKeysChan returns the list of keys in the store
 func (c *Carbs) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
+	header, err := car.ReadHeader(bufio.NewReader(&unatreader{c.backing, 0}))
+	if err != nil {
+		return nil, fmt.Errorf("Error reading car header: %w", err)
+	}
+	offset, err := car.HeaderSize(header)
+	if err != nil {
+		return nil, err
+	}
+
 	ch := make(chan cid.Cid, 5)
 	go func() {
 		done := ctx.Done()
-		for key := range *(c.idx) {
+
+		rdr := unatreader{c.backing, int64(offset)}
+		for true {
+			l, err := binary.ReadUvarint(&rdr)
+			thisItemForNxt := rdr.at
+			if err != nil {
+				return
+			}
+			c, _, err := readCid(c.backing, thisItemForNxt)
+			if err != nil {
+				return
+			}
+			rdr.at = thisItemForNxt + int64(l)
+
 			select {
-			case ch <- key:
+			case ch <- c:
 				continue
 			case <-done:
 				return
@@ -103,48 +180,31 @@ func Load(path string, noPersist bool) (*Carbs, error) {
 	if err != nil {
 		return nil, err
 	}
-	idx := make(carbsIndex)
-	idxRef := &idx
-	if err := idx.Unmarshal(path); err != nil {
-		idxRef, err = generateIndex(reader)
+	idx, err := Restore(path)
+	if err != nil {
+		idx, err = generateIndex(reader, IndexSorted)
 		if err != nil {
 			return nil, err
 		}
 		if !noPersist {
-			if err = idxRef.Marshal(path); err != nil {
+			if err = Save(idx, path); err != nil {
 				return nil, err
 			}
 		}
 	}
 	obj := Carbs{
 		backing: reader,
-		idx:     idxRef,
+		idx:     idx,
 	}
 	return &obj, nil
 }
 
-type carbsIndex map[cid.Cid]int64
-
-func (c carbsIndex) Marshal(path string) error {
-	stream, err := os.OpenFile(path+".idx", os.O_WRONLY|os.O_APPEND, 0640)
-	if err != nil {
-		return err
+func generateIndex(store io.ReaderAt, codec IndexCodec) (Index, error) {
+	indexcls, ok := IndexAtlas[codec]
+	if !ok {
+		return nil, fmt.Errorf("unknown codec: %#v", codec)
 	}
-	defer stream.Close()
-	return cbor.Encode(stream, &c)
-}
 
-func (c carbsIndex) Unmarshal(path string) error {
-	stream, err := os.Open(path + ".idx")
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-	decoder := cbor.NewDecoder(stream)
-	return decoder.Decode(&c)
-}
-
-func generateIndex(store io.ReaderAt) (*carbsIndex, error) {
 	header, err := car.ReadHeader(bufio.NewReader(&unatreader{store, 0}))
 	if err != nil {
 		return nil, fmt.Errorf("Error reading car header: %w", err)
@@ -154,9 +214,9 @@ func generateIndex(store io.ReaderAt) (*carbsIndex, error) {
 		return nil, err
 	}
 
-	index := make(carbsIndex)
-	cidBuf := make([]byte, 48)
+	index := indexcls()
 
+	records := make([]Record, 0)
 	rdr := unatreader{store, int64(offset)}
 	for true {
 		thisItemIdx := rdr.at
@@ -168,34 +228,31 @@ func generateIndex(store io.ReaderAt) (*carbsIndex, error) {
 			}
 			return nil, err
 		}
-		m := l
-		if 48 < l {
-			m = 48
-		}
-		if _, err = rdr.Read(cidBuf[:m]); err != nil {
-			return nil, err
-		}
-		c, _, err := util.ReadCid(cidBuf[:m])
+		c, _, err := readCid(store, thisItemForNxt)
 		if err != nil {
 			return nil, err
 		}
-		index[c] = thisItemIdx
+		records = append(records, Record{c, uint64(thisItemIdx)})
 		rdr.at = thisItemForNxt + int64(l)
 	}
 
-	return &index, nil
+	if err := index.Load(records); err != nil {
+		return nil, err
+	}
+
+	return index, nil
 }
 
 // Generate walks a car file and generates an index of cid->byte offset in it.
-func Generate(path string) error {
+func Generate(path string, codec IndexCodec) error {
 	store, err := mmap.Open(path)
 	if err != nil {
 		return err
 	}
-	idx, err := generateIndex(store)
+	idx, err := generateIndex(store, codec)
 	if err != nil {
 		return err
 	}
 
-	return idx.Marshal(path)
+	return Save(idx, path)
 }

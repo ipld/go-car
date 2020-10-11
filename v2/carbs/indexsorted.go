@@ -1,0 +1,191 @@
+package carbs
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"sort"
+
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
+)
+
+type digestRecord struct {
+	digest []byte
+	index  uint64
+}
+
+func (d digestRecord) write(buf []byte) {
+	n := copy(d.digest, buf[:])
+	binary.LittleEndian.PutUint64(buf[n:], d.index)
+}
+
+type recordSet []digestRecord
+
+func (r recordSet) Len() int {
+	return len(r)
+}
+
+func (r recordSet) Less(i, j int) bool {
+	return bytes.Compare(r[i].digest, r[j].digest) < 0
+}
+
+func (r recordSet) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+type singleWidthIndex struct {
+	width int
+	len   int // in struct, len is #items. when marshaled, it's saved as #bytes.
+	index []byte
+}
+
+func (s *singleWidthIndex) Codec() IndexCodec {
+	return IndexSingleSorted
+}
+
+func (s *singleWidthIndex) Marshal(w io.Writer) error {
+	if err := binary.Write(w, binary.LittleEndian, s.width); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, len(s.index)); err != nil {
+		return err
+	}
+	_, err := io.Copy(w, bytes.NewBuffer(s.index))
+	return err
+}
+
+func (s *singleWidthIndex) Unmarshal(r io.Reader) error {
+	if err := binary.Read(r, binary.LittleEndian, &s.width); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &s.len); err != nil {
+		return err
+	}
+	s.index = make([]byte, s.len)
+	s.len /= s.width
+	_, err := io.ReadFull(r, s.index)
+	return err
+}
+
+func (s *singleWidthIndex) Less(i int, digest []byte) bool {
+	return bytes.Compare(digest[:], s.index[i*s.width:((i+1)*s.width-8)]) < 0
+}
+
+func (s *singleWidthIndex) Get(c cid.Cid) uint64 {
+	d, err := multihash.Decode(c.Hash())
+	if err != nil {
+		return 0
+	}
+	return s.get(d.Digest)
+}
+
+func (s *singleWidthIndex) get(d []byte) uint64 {
+	idx := sort.Search(s.len, func(i int) bool {
+		return !s.Less(i, d)
+	})
+	return binary.LittleEndian.Uint64(s.index[(idx+1)*s.width-8 : (idx+1)*s.width])
+}
+
+func (s *singleWidthIndex) Load(items []Record) error {
+	m := make(multiWidthIndex)
+	if err := m.Load(items); err != nil {
+		return err
+	}
+	if len(m) != 1 {
+		return fmt.Errorf("unexpected number of cid widths: %d", len(m))
+	}
+	for _, i := range m {
+		s.index = i.index
+		s.len = i.len
+		s.width = i.width
+		return nil
+	}
+	return nil
+}
+
+type multiWidthIndex map[int]singleWidthIndex
+
+func (m *multiWidthIndex) Get(c cid.Cid) uint64 {
+	d, err := multihash.Decode(c.Hash())
+	if err != nil {
+		return 0
+	}
+	if s, ok := (*m)[len(d.Digest)]; ok {
+		return s.get(d.Digest)
+	}
+	return 0
+}
+
+func (m *multiWidthIndex) Codec() IndexCodec {
+	return IndexSorted
+}
+
+func (m *multiWidthIndex) Marshal(w io.Writer) error {
+	binary.Write(w, binary.LittleEndian, len(*m))
+	for _, s := range *m {
+		if err := s.Marshal(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *multiWidthIndex) Unmarshal(r io.Reader) error {
+	var l int
+	binary.Read(r, binary.LittleEndian, &l)
+	for i := 0; i < l; i++ {
+		s := singleWidthIndex{}
+		if err := s.Unmarshal(r); err != nil {
+			return err
+		}
+		(*m)[s.width] = s
+	}
+	return nil
+}
+
+func (m *multiWidthIndex) Load(items []Record) error {
+	// Split cids on their digest length
+	idxs := make(map[int][]digestRecord)
+	for _, item := range items {
+		decHash, err := multihash.Decode(item.Hash())
+		if err != nil {
+			return err
+		}
+		digest := decHash.Digest
+		idx, ok := idxs[len(digest)]
+		if !ok {
+			idxs[len(digest)] = make([]digestRecord, 0)
+			idx = idxs[len(digest)]
+		}
+		idxs[len(digest)] = append(idx, digestRecord{digest, item.idx})
+	}
+
+	// Sort each list. then write to compact form.
+	for width, lst := range idxs {
+		sort.Sort(recordSet(lst))
+		rcrdWdth := width + 8
+		compact := make([]byte, rcrdWdth*len(lst))
+		for off, itm := range lst {
+			itm.write(compact[off*rcrdWdth : (off+1)*rcrdWdth])
+		}
+		s := singleWidthIndex{
+			width: rcrdWdth,
+			len:   len(lst),
+			index: compact,
+		}
+		(*m)[width] = s
+	}
+	return nil
+}
+
+func mkSorted() Index {
+	m := make(multiWidthIndex)
+	return &m
+}
+
+func mkSingleSorted() Index {
+	s := singleWidthIndex{}
+	return &s
+}
