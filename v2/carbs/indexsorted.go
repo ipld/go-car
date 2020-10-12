@@ -36,8 +36,8 @@ func (r recordSet) Swap(i, j int) {
 }
 
 type singleWidthIndex struct {
-	width int
-	len   int // in struct, len is #items. when marshaled, it's saved as #bytes.
+	width int32
+	len   int64 // in struct, len is #items. when marshaled, it's saved as #bytes.
 	index []byte
 }
 
@@ -64,13 +64,13 @@ func (s *singleWidthIndex) Unmarshal(r io.Reader) error {
 		return err
 	}
 	s.index = make([]byte, s.len)
-	s.len /= s.width
+	s.len /= int64(s.width)
 	_, err := io.ReadFull(r, s.index)
 	return err
 }
 
 func (s *singleWidthIndex) Less(i int, digest []byte) bool {
-	return bytes.Compare(digest[:], s.index[i*s.width:((i+1)*s.width-8)]) < 0
+	return bytes.Compare(digest[:], s.index[i*int(s.width):((i+1)*int(s.width)-8)]) < 0
 }
 
 func (s *singleWidthIndex) Get(c cid.Cid) uint64 {
@@ -82,10 +82,10 @@ func (s *singleWidthIndex) Get(c cid.Cid) uint64 {
 }
 
 func (s *singleWidthIndex) get(d []byte) uint64 {
-	idx := sort.Search(s.len, func(i int) bool {
+	idx := sort.Search(int(s.len), func(i int) bool {
 		return !s.Less(i, d)
 	})
-	return binary.LittleEndian.Uint64(s.index[(idx+1)*s.width-8 : (idx+1)*s.width])
+	return binary.LittleEndian.Uint64(s.index[(idx+1)*int(s.width)-8 : (idx+1)*int(s.width)])
 }
 
 func (s *singleWidthIndex) Load(items []Record) error {
@@ -105,14 +105,14 @@ func (s *singleWidthIndex) Load(items []Record) error {
 	return nil
 }
 
-type multiWidthIndex map[int]singleWidthIndex
+type multiWidthIndex map[int32]singleWidthIndex
 
 func (m *multiWidthIndex) Get(c cid.Cid) uint64 {
 	d, err := multihash.Decode(c.Hash())
 	if err != nil {
 		return 0
 	}
-	if s, ok := (*m)[len(d.Digest)]; ok {
+	if s, ok := (*m)[int32(len(d.Digest))]; ok {
 		return s.get(d.Digest)
 	}
 	return 0
@@ -123,7 +123,7 @@ func (m *multiWidthIndex) Codec() IndexCodec {
 }
 
 func (m *multiWidthIndex) Marshal(w io.Writer) error {
-	binary.Write(w, binary.LittleEndian, len(*m))
+	binary.Write(w, binary.LittleEndian, int32(len(*m)))
 	for _, s := range *m {
 		if err := s.Marshal(w); err != nil {
 			return err
@@ -133,9 +133,9 @@ func (m *multiWidthIndex) Marshal(w io.Writer) error {
 }
 
 func (m *multiWidthIndex) Unmarshal(r io.Reader) error {
-	var l int
+	var l int32
 	binary.Read(r, binary.LittleEndian, &l)
-	for i := 0; i < l; i++ {
+	for i := 0; i < int(l); i++ {
 		s := singleWidthIndex{}
 		if err := s.Unmarshal(r); err != nil {
 			return err
@@ -171,11 +171,11 @@ func (m *multiWidthIndex) Load(items []Record) error {
 			itm.write(compact[off*rcrdWdth : (off+1)*rcrdWdth])
 		}
 		s := singleWidthIndex{
-			width: rcrdWdth,
-			len:   len(lst),
+			width: int32(rcrdWdth),
+			len:   int64(len(lst)),
 			index: compact,
 		}
-		(*m)[width] = s
+		(*m)[int32(width)] = s
 	}
 	return nil
 }
