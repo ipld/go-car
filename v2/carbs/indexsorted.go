@@ -49,7 +49,7 @@ func (s *singleWidthIndex) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, s.width); err != nil {
 		return err
 	}
-	if err := binary.Write(w, binary.LittleEndian, len(s.index)); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, int64(len(s.index))); err != nil {
 		return err
 	}
 	_, err := io.Copy(w, bytes.NewBuffer(s.index))
