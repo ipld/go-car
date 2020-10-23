@@ -17,6 +17,7 @@ const (
 	IndexHashed IndexCodec = iota + 0x300000
 	IndexSorted
 	IndexSingleSorted
+	IndexGobHashed
 )
 
 // IndexCls is a constructor for an index type
@@ -27,6 +28,7 @@ var IndexAtlas = map[IndexCodec]IndexCls{
 	IndexHashed:       mkHashed,
 	IndexSorted:       mkSorted,
 	IndexSingleSorted: mkSingleSorted,
+	IndexGobHashed:    mkGobHashed,
 }
 
 // Record is a pre-processed record of a car item and location.
