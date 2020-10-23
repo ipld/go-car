@@ -17,6 +17,8 @@ func main() {
 	if len(os.Args) == 3 {
 		if os.Args[2] == "Hash" {
 			codec = carbs.IndexHashed
+		} else if os.Args[2] == "GobHash" {
+			code = carbs.IndexGobHashed
 		}
 	}
 
