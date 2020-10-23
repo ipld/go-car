@@ -19,7 +19,7 @@ func (m *mapIndex) Marshal(w io.Writer) error {
 
 func (m *mapIndex) Unmarshal(r io.Reader) error {
 	d := cbor.NewDecoder(r)
-	return d.Decode(&m)
+	return d.Decode(m)
 }
 
 func (m *mapIndex) Codec() IndexCodec {

@@ -67,7 +67,8 @@ func Restore(path string) (Index, error) {
 		return nil, err
 	}
 	defer stream.Close()
-	codec, err := binary.ReadUvarint(&unatreader{stream, 0})
+	uar := unatreader{stream, 0}
+	codec, err := binary.ReadUvarint(&uar)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func Restore(path string) (Index, error) {
 		return nil, fmt.Errorf("Unknown codec: %d", codec)
 	}
 	idxInst := idx()
-	if err := idxInst.Unmarshal(stream); err != nil {
+	if err := idxInst.Unmarshal(&uar); err != nil {
 		return nil, err
 	}
 
