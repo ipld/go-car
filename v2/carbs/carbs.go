@@ -174,6 +174,15 @@ func (c *Carbs) HashOnRead(enabled bool) {
 	return
 }
 
+// Roots returns the root CIDs of the backing car
+func (c *Carbs) Roots() ([]cid.Cid, error) {
+	header, err := car.ReadHeader(bufio.NewReader(&unatreader{c.backing, 0}))
+	if err != nil {
+		return nil, fmt.Errorf("Error reading car header: %w", err)
+	}
+	return header.Roots, nil
+}
+
 // Load opens a carbs data store, generating an index if it does not exist
 func Load(path string, noPersist bool) (*Carbs, error) {
 	reader, err := mmap.Open(path)

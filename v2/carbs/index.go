@@ -22,12 +22,14 @@ const (
 // IndexCls is a constructor for an index type
 type IndexCls func() Index
 
+// IndexAtlas holds known index formats
 var IndexAtlas = map[IndexCodec]IndexCls{
 	IndexHashed:       mkHashed,
 	IndexSorted:       mkSorted,
 	IndexSingleSorted: mkSingleSorted,
 }
 
+// Record is a pre-processed record of a car item and location.
 type Record struct {
 	cid.Cid
 	idx uint64
