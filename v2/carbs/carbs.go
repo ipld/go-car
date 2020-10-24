@@ -18,6 +18,8 @@ import (
 	"golang.org/x/exp/mmap"
 )
 
+var errNotFound = bs.ErrNotFound
+
 // Carbs provides a read-only Car Block Store.
 type Carbs struct {
 	backing io.ReaderAt
@@ -26,9 +28,8 @@ type Carbs struct {
 
 var _ bs.Blockstore = (*Carbs)(nil)
 
-func (c *Carbs) Read(idx int64) ([]byte, error) {
-	_, bytes, err := util.ReadNode(bufio.NewReader(&unatreader{c.backing, idx}))
-	return bytes, err
+func (c *Carbs) Read(idx int64) (cid.Cid, []byte, error) {
+	return util.ReadNode(bufio.NewReader(&unatreader{c.backing, idx}))
 }
 
 // DeleteBlock doesn't delete a block on RO blockstore
@@ -38,9 +39,12 @@ func (c *Carbs) DeleteBlock(_ cid.Cid) error {
 
 // Has indicates if the store has a cid
 func (c *Carbs) Has(key cid.Cid) (bool, error) {
-	offset := c.idx.Get(key)
+	offset, err := c.idx.Get(key)
+	if err != nil {
+		return false, err
+	}
 	uar := unatreader{c.backing, int64(offset)}
-	_, err := binary.ReadUvarint(&uar)
+	_, err = binary.ReadUvarint(&uar)
 	if err != nil {
 		return false, err
 	}
@@ -95,27 +99,37 @@ func readCid(store io.ReaderAt, at int64) (cid.Cid, int, error) {
 
 // Get gets a block from the store
 func (c *Carbs) Get(key cid.Cid) (blocks.Block, error) {
-	offset := c.idx.Get(key)
-	bytes, err := c.Read(int64(offset))
+	offset, err := c.idx.Get(key)
 	if err != nil {
 		return nil, err
+	}
+	entry, bytes, err := c.Read(int64(offset))
+	if err != nil {
+		fmt.Printf("failed get %d:%v\n", offset, err)
+		return nil, bs.ErrNotFound
+	}
+	if !entry.Equals(key) {
+		return nil, bs.ErrNotFound
 	}
 	return blocks.NewBlockWithCid(bytes, key)
 }
 
 // GetSize gets how big a item is
 func (c *Carbs) GetSize(key cid.Cid) (int, error) {
-	idx := c.idx.Get(key)
+	idx, err := c.idx.Get(key)
+	if err != nil {
+		return -1, err
+	}
 	len, err := binary.ReadUvarint(&unatreader{c.backing, int64(idx)})
 	if err != nil {
-		return 0, err
+		return -1, bs.ErrNotFound
 	}
 	cid, _, err := readCid(c.backing, int64(idx+len))
 	if err != nil {
 		return 0, err
 	}
 	if !cid.Equals(key) {
-		return 0, fmt.Errorf("Not found: %s", key)
+		return -1, bs.ErrNotFound
 	}
 	// get cid. validate.
 	return int(len), err

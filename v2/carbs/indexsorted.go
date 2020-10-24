@@ -70,21 +70,27 @@ func (s *singleWidthIndex) Unmarshal(r io.Reader) error {
 }
 
 func (s *singleWidthIndex) Less(i int, digest []byte) bool {
-	return bytes.Compare(digest[:], s.index[i*int(s.width):((i+1)*int(s.width)-8)]) < 0
+	return bytes.Compare(digest[:], s.index[i*int(s.width):((i+1)*int(s.width)-8)]) <= 0
 }
 
-func (s *singleWidthIndex) Get(c cid.Cid) uint64 {
+func (s *singleWidthIndex) Get(c cid.Cid) (uint64, error) {
 	d, err := multihash.Decode(c.Hash())
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return s.get(d.Digest)
+	return s.get(d.Digest), nil
 }
 
 func (s *singleWidthIndex) get(d []byte) uint64 {
 	idx := sort.Search(int(s.len), func(i int) bool {
-		return !s.Less(i, d)
+		return s.Less(i, d)
 	})
+	if int64(idx) == s.len {
+		return 0
+	}
+	if bytes.Compare(d[:], s.index[idx*int(s.width):(idx+1)*int(s.width)-8]) != 0 {
+		return 0
+	}
 	return binary.LittleEndian.Uint64(s.index[(idx+1)*int(s.width)-8 : (idx+1)*int(s.width)])
 }
 
@@ -107,19 +113,15 @@ func (s *singleWidthIndex) Load(items []Record) error {
 
 type multiWidthIndex map[int32]singleWidthIndex
 
-func (m *multiWidthIndex) Get(c cid.Cid) uint64 {
+func (m *multiWidthIndex) Get(c cid.Cid) (uint64, error) {
 	d, err := multihash.Decode(c.Hash())
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	if s, ok := (*m)[int32(len(d.Digest)+8)]; ok {
-		return s.get(d.Digest)
+		return s.get(d.Digest), nil
 	}
-	for w := range *m {
-		fmt.Printf("widht: %d\n", w)
-	}
-	fmt.Printf("no width: %d\n", len(d.Digest))
-	return 0
+	return 0, errNotFound
 }
 
 func (m *multiWidthIndex) Codec() IndexCodec {

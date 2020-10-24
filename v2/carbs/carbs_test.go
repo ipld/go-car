@@ -72,15 +72,15 @@ func TestIndexRT(t *testing.T) {
 		t.Fatalf("unexpected number of roots: %d", len(r))
 	}
 	if _, err := cf.Get(r[0]); err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed get: %v", err)
 	}
 
 	idx, err := Restore(carFile)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed restore: %v", err)
 	}
-	if idx.Get(r[0]) <= 0 {
-		t.Fatalf("bad index: %d", idx.Get(r[0]))
+	if idx, err := idx.Get(r[0]); idx == 0 || err != nil {
+		t.Fatalf("bad index: %d %v", idx, err)
 	}
 }
 

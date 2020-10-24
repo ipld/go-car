@@ -9,8 +9,12 @@ import (
 
 type mapGobIndex map[cid.Cid]uint64
 
-func (m *mapGobIndex) Get(c cid.Cid) uint64 {
-	return (*m)[c]
+func (m *mapGobIndex) Get(c cid.Cid) (uint64, error) {
+	el, ok := (*m)[c]
+	if !ok {
+		return 0, errNotFound
+	}
+	return el, nil
 }
 
 func (m *mapGobIndex) Marshal(w io.Writer) error {
