@@ -39,11 +39,12 @@ func (c *Carbs) DeleteBlock(_ cid.Cid) error {
 // Has indicates if the store has a cid
 func (c *Carbs) Has(key cid.Cid) (bool, error) {
 	offset := c.idx.Get(key)
-	len, err := binary.ReadUvarint(&unatreader{c.backing, int64(offset)})
+	uar := unatreader{c.backing, int64(offset)}
+	_, err := binary.ReadUvarint(&uar)
 	if err != nil {
 		return false, err
 	}
-	cid, _, err := readCid(c.backing, int64(offset+len))
+	cid, _, err := readCid(c.backing, uar.at)
 	if err != nil {
 		return false, err
 	}
@@ -75,7 +76,7 @@ func readCid(store io.ReaderAt, at int64) (cid.Cid, int, error) {
 
 	// TODO: the go-cid package allows version 0 here as well
 	if vers != 1 {
-		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number")
+		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number: %d", vers)
 	}
 
 	codec, err := binary.ReadUvarint(br)
