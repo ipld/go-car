@@ -76,7 +76,7 @@ func readCid(store io.ReaderAt, at int64) (cid.Cid, int, error) {
 
 	// TODO: the go-cid package allows version 0 here as well
 	if vers != 1 {
-		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number")
+		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number: %d", vers)
 	}
 
 	codec, err := binary.ReadUvarint(br)

@@ -17,7 +17,7 @@ type digestRecord struct {
 }
 
 func (d digestRecord) write(buf []byte) {
-	n := copy(d.digest, buf[:])
+	n := copy(buf[:], d.digest)
 	binary.LittleEndian.PutUint64(buf[n:], d.index)
 }
 
@@ -115,6 +115,10 @@ func (m *multiWidthIndex) Get(c cid.Cid) uint64 {
 	if s, ok := (*m)[int32(len(d.Digest)+8)]; ok {
 		return s.get(d.Digest)
 	}
+	for w := range *m {
+		fmt.Printf("widht: %d\n", w)
+	}
+	fmt.Printf("no width: %d\n", len(d.Digest))
 	return 0
 }
 
@@ -175,7 +179,7 @@ func (m *multiWidthIndex) Load(items []Record) error {
 			len:   int64(len(lst)),
 			index: compact,
 		}
-		(*m)[int32(width)] = s
+		(*m)[int32(width)+8] = s
 	}
 	return nil
 }

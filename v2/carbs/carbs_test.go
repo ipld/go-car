@@ -3,17 +3,14 @@ package carbs
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/ipfs/go-cid"
-	cbornode "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipld/go-car"
-	"github.com/multiformats/go-multihash"
 )
 
+/*
 func mkCar() (string, error) {
 	f, err := ioutil.TempFile(os.TempDir(), "car")
 	if err != nil {
@@ -39,7 +36,7 @@ func mkCar() (string, error) {
 	}
 	b, err := cbornode.WrapObject(linker{Name: "root", Links: childLinks}, multihash.SHA2_256, -1)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("couldn't make cbor node: %v", err)
 	}
 	ds.Nodes[b.Cid()] = b
 
@@ -49,13 +46,17 @@ func mkCar() (string, error) {
 
 	return f.Name(), nil
 }
+*/
 
 func TestIndexRT(t *testing.T) {
-	carFile, err := mkCar()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(carFile)
+	/*
+		carFile, err := mkCar()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(carFile)
+	*/
+	carFile := "test.car"
 
 	cf, err := Load(carFile, false)
 	if err != nil {
@@ -78,7 +79,7 @@ func TestIndexRT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if idx.Get(r[0]) != 0 {
+	if idx.Get(r[0]) <= 0 {
 		t.Fatalf("bad index: %d", idx.Get(r[0]))
 	}
 }
@@ -100,7 +101,7 @@ func (m *mockNodeGetter) GetMany(_ context.Context, cs []cid.Cid) <-chan *format
 	go func() {
 		for _, c := range cs {
 			n, e := m.Get(nil, c)
-			ch <- &format.NodeOption{n, e}
+			ch <- &format.NodeOption{Node: n, Err: e}
 		}
 	}()
 	return ch
