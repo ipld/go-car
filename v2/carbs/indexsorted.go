@@ -112,7 +112,7 @@ func (m *multiWidthIndex) Get(c cid.Cid) uint64 {
 	if err != nil {
 		return 0
 	}
-	if s, ok := (*m)[int32(len(d.Digest))]; ok {
+	if s, ok := (*m)[int32(len(d.Digest)+8)]; ok {
 		return s.get(d.Digest)
 	}
 	return 0
