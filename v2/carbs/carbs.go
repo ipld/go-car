@@ -13,6 +13,7 @@ import (
 	bs "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/multiformats/go-multihash"
 
+	pb "github.com/cheggaaa/pb/v3"
 	car "github.com/ipld/go-car"
 	"github.com/ipld/go-car/util"
 	"golang.org/x/exp/mmap"
@@ -206,7 +207,7 @@ func Load(path string, noPersist bool) (*Carbs, error) {
 	}
 	idx, err := Restore(path)
 	if err != nil {
-		idx, err = generateIndex(reader, IndexSorted)
+		idx, err = GenerateIndex(reader, 0, IndexSorted, false)
 		if err != nil {
 			return nil, err
 		}
@@ -223,11 +224,19 @@ func Load(path string, noPersist bool) (*Carbs, error) {
 	return &obj, nil
 }
 
-func generateIndex(store io.ReaderAt, codec IndexCodec) (Index, error) {
+// GenerateIndex provides a low-level interface to create an index over a
+// reader to a car stream.
+func GenerateIndex(store io.ReaderAt, size int64, codec IndexCodec, verbose bool) (Index, error) {
 	indexcls, ok := IndexAtlas[codec]
 	if !ok {
 		return nil, fmt.Errorf("unknown codec: %#v", codec)
 	}
+
+	bar := pb.New64(size)
+	bar.Set(pb.Bytes, true)
+	bar.Set(pb.Terminal, true)
+
+	bar.Start()
 
 	header, err := car.ReadHeader(bufio.NewReader(&unatreader{store, 0}))
 	if err != nil {
@@ -237,6 +246,7 @@ func generateIndex(store io.ReaderAt, codec IndexCodec) (Index, error) {
 	if err != nil {
 		return nil, err
 	}
+	bar.Add64(int64(offset))
 
 	index := indexcls()
 
@@ -245,6 +255,7 @@ func generateIndex(store io.ReaderAt, codec IndexCodec) (Index, error) {
 	for true {
 		thisItemIdx := rdr.at
 		l, err := binary.ReadUvarint(&rdr)
+		bar.Add64(int64(l))
 		thisItemForNxt := rdr.at
 		if err != nil {
 			if err == io.EOF {
@@ -264,6 +275,8 @@ func generateIndex(store io.ReaderAt, codec IndexCodec) (Index, error) {
 		return nil, err
 	}
 
+	bar.Finish()
+
 	return index, nil
 }
 
@@ -273,7 +286,7 @@ func Generate(path string, codec IndexCodec) error {
 	if err != nil {
 		return err
 	}
-	idx, err := generateIndex(store, codec)
+	idx, err := GenerateIndex(store, 0, codec, false)
 	if err != nil {
 		return err
 	}
