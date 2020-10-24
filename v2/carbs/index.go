@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/ipfs/go-cid"
+	"golang.org/x/exp/mmap"
 )
 
 // IndexCodec is used as a multicodec identifier for carbs index files
@@ -64,12 +65,13 @@ func Save(i Index, path string) error {
 
 // Restore loads an index from an on-disk representation.
 func Restore(path string) (Index, error) {
-	stream, err := os.Open(path + ".idx")
+	reader, err := mmap.Open(path + ".idx")
 	if err != nil {
 		return nil, err
 	}
-	defer stream.Close()
-	uar := unatreader{stream, 0}
+
+	defer reader.Close()
+	uar := unatreader{reader, 0}
 	codec, err := binary.ReadUvarint(&uar)
 	if err != nil {
 		return nil, err
