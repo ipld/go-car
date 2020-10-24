@@ -43,7 +43,7 @@ type Index interface {
 	Codec() IndexCodec
 	Marshal(w io.Writer) error
 	Unmarshal(r io.Reader) error
-	Get(cid.Cid) uint64
+	Get(cid.Cid) (uint64, error)
 	Load([]Record) error
 }
 
