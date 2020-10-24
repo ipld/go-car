@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/willscott/carbs"
+	"golang.org/x/exp/mmap"
 )
 
 func main() {
@@ -22,8 +23,29 @@ func main() {
 		}
 	}
 
-	if err := carbs.Generate(db, codec); err != nil {
-		fmt.Printf("Error Hydrating: %v\n", err)
+	dbBacking, err := mmap.Open(db)
+	if err != nil {
+		fmt.Printf("Error Opening car for hydration: %v\n", err)
+		return
+	}
+
+	dbstat, err := os.Stat(db)
+	if err != nil {
+		fmt.Printf("Error statting car for hydration: %v\n", err)
+		return
+	}
+
+	idx, err := carbs.GenerateIndex(dbBacking, dbstat.Size(), codec, true)
+	if err != nil {
+		fmt.Printf("Error generating index: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Saving...\n")
+
+	if err := carbs.Save(idx, db); err != nil {
+		fmt.Printf("Error saving : %v\n", err)
+		return
 	}
 	return
 }
