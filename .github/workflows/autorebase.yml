@@ -1,0 +1,25 @@
+# Workflow managed by ipldbot. DO NOT EDIT.
+# See https://github.com/ipld/.github/ for details.
+
+# Allow PRs opened by ipldbot to be rebased by commenting "@ipldbot rebase" on the PR.
+
+on: 
+  issue_comment:
+    types: [ created ]
+    
+name: Automatic Rebase
+jobs:
+  rebase:
+    name: Rebase
+    if: github.event.issue.pull_request != '' && github.event.issue.user.login == 'ipldbot' && contains(github.event.comment.body, '@ipldbot rebase')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the latest code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.IPLDBOT_GITHUB_TOKEN }}
+    - name: Automatic Rebase
+      uses: cirrus-actions/rebase@1.4
+      env:
+        GITHUB_TOKEN: ${{ secrets.IPLDBOT_GITHUB_TOKEN }}
