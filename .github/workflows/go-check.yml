@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
+        uses: golangci/golangci-lint-action@d9f0e73c0497685d68af8c58280f49fcaf0545ff # v2.5.1
         with:
           version: v1.33
           args: "--disable-all --enable gofmt,govet"
