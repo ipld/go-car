@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ "ubuntu", "windows", "macos" ]
-        go: [ "1.14.x", "1.15.x" ]
+        go: [ "1.15.x", "1.16.x" ]
     runs-on: ${{ matrix.os }}-latest
     name: Unit tests (${{ matrix.os}}, Go ${{ matrix.go }})
     steps:
@@ -21,8 +21,6 @@ jobs:
         run: |
           go version
           go env
-      - name: Install dependencies
-        run: go install ./...
       - name: Run tests
         run: go test -v -coverprofile coverage.txt ./...
       - name: Run tests (32 bit)
@@ -35,12 +33,12 @@ jobs:
         run: go test -v -race ./...
       - name: Check if codecov.yml exists # only upload to Codecov if there's a codecov.yml
         id: check_codecov
-        uses: andstor/file-existence-action@v1
+        uses: andstor/file-existence-action@87d74d4732ddb824259d80c8a508c0124bf1c673 # v1.0.1
         with:
           files: "codecov.yml"
       - name: Upload coverage to Codecov
         if: steps.check_codecov.outputs.files_exists == 'true'
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@e156083f13aff6830c92fc5faa23505779fbf649 # v1.2.1
         with:
           file: coverage.txt
           env_vars: OS=${{ matrix.os }}, GO=${{ matrix.go }}
