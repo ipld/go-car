@@ -10,7 +10,7 @@ require (
 	github.com/ipfs/go-ipld-cbor v0.0.5 // indirect
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipld/go-car v0.1.1-0.20201119040415-11b6074b6d4d
-	github.com/multiformats/go-multihash v0.0.14
+	github.com/multiformats/go-multihash v0.0.15
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
 	golang.org/x/exp v0.0.0-20200924195034-c827fd4f18b9
 )
