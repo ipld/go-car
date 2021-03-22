@@ -20,6 +20,6 @@ jobs:
         fetch-depth: 0
         token: ${{ secrets.IPLDBOT_GITHUB_TOKEN }}
     - name: Automatic Rebase
-      uses: cirrus-actions/rebase@1.4
+      uses: cirrus-actions/rebase@7cea12ac34ab078fa37e87798d8986185afa7bf2 # v1.4
       env:
         GITHUB_TOKEN: ${{ secrets.IPLDBOT_GITHUB_TOKEN }}
