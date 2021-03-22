@@ -9,8 +9,24 @@ jobs:
     name: Go checks
     steps:
       - uses: actions/checkout@v2
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@d9f0e73c0497685d68af8c58280f49fcaf0545ff # v2.5.1
+      - uses: actions/setup-go@v2
         with:
-          version: v1.33
-          args: "--disable-all --enable gofmt,govet"
+          go-version: "1.16.x"
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@be534f007836a777104a15f2456cd1fffd3ddee8 # v2020.2.2
+      - name: Check that go.mod is tidy
+        run: |
+          cp go.mod go.mod.orig
+          cp go.sum go.sum.orig
+          go mod tidy
+          diff go.mod go.mod.orig
+          diff go.sum go.sum.orig
+      - name: go vet
+        if: ${{ success() || failure() }} # run this step even if the previous one failed
+        run: go vet ./...
+      - name: staticcheck
+        if: ${{ success() || failure() }} # run this step even if the previous one failed
+        run: |
+          set -o pipefail
+          staticcheck ./... | sed -e 's@\(.*\)\.go@./\1.go@g'
+
