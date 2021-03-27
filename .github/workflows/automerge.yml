@@ -1,14 +1,14 @@
-# Workflow managed by ipldbot. DO NOT EDIT.
-# See https://github.com/ipld/.github/ for details.
+# Workflow managed by web3-bot. DO NOT EDIT.
+# See https://github.com/protocol/.github/ for details.
 
-# Automatically merge pull requests opened by ipldbot, as soon as (and only if) all tests pass.
+# Automatically merge pull requests opened by web3-bot, as soon as (and only if) all tests pass.
 # This reduces the friction associated with updating with our workflows.
 
 on: [ pull_request ]
 
 jobs:
   automerge:
-    if: github.event.pull_request.user.login == 'ipldbot'
+    if: github.event.pull_request.user.login == 'web3-bot'
     runs-on: ubuntu-latest
     steps:
     - name: Wait on tests
