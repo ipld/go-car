@@ -1,5 +1,5 @@
-# Workflow managed by ipldbot. DO NOT EDIT.
-# See https://github.com/ipld/.github/ for details.
+# Workflow managed by web3-bot. DO NOT EDIT.
+# See https://github.com/protocol/.github/ for details.
 
 on: [push, pull_request]
 
