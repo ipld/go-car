@@ -3,7 +3,7 @@ module github.com/willscott/carbs
 go 1.14
 
 require (
-	github.com/cheggaaa/pb/v3 v3.0.7
+	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.0.7
 	github.com/ipfs/go-ipfs-blockstore v1.0.3
