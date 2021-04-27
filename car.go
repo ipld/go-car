@@ -261,13 +261,13 @@ func loadCarSlow(s Store, cr *CarReader) (*CarHeader, error) {
 			logger.Debugf("loaded CAR successfully, nBlocksWritten=%d", nBlocks)
 			return cr.Header, nil
 		default:
-			logger.Errorf("failed to load CAR, err=%s, nBlocksWritten=%d", err, nBlocks)
+			logger.Errorf("failed to load CAR, nBlocksWritten=%d, err=%s", nBlocks, err)
 			return nil, err
 		case nil:
 		}
 
 		if err := s.Put(blk); err != nil {
-			logger.Errorf("failed to write block with cid=%s to the blockstore, err=%s, nBlocksWritten=%d", blk.Cid(), err, nBlocks)
+			logger.Errorf("failed to write block with cid=%s to the blockstore, nBlocksWritten=%d, err=%s", blk.Cid(), nBlocks, err)
 			return nil, err
 		}
 
