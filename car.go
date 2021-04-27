@@ -13,7 +13,7 @@ import (
 	posinfo "github.com/ipfs/go-ipfs-posinfo"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-log"
+	"github.com/ipfs/go-log/v2"
 	dag "github.com/ipfs/go-merkledag"
 
 	util "github.com/ipld/go-car/util"
@@ -200,18 +200,18 @@ type batchStore interface {
 }
 
 func LoadCar(s Store, r io.Reader) (*CarHeader, error) {
-	logger.Info("will load car now")
+	logger.Debug("will load car now")
 	cr, err := NewCarReader(r)
 	if err != nil {
 		return nil, err
 	}
 
 	if bs, ok := s.(batchStore); ok {
-		logger.Info("will load car fast")
+		logger.Debug("will load car fast")
 		return loadCarFast(bs, cr)
 	}
 
-	logger.Info("will load car slow")
+	logger.Debug("will load car slow")
 	return loadCarSlow(s, cr)
 }
 
@@ -224,7 +224,7 @@ func loadCarFast(s batchStore, cr *CarReader) (*CarHeader, error) {
 		case io.EOF:
 			if len(buf) > 0 {
 				if err := s.PutMany(buf); err != nil {
-					logger.Errorf("failed to write %d blocks on completion, err=%s, nBlocksWritten=%d", len(buf), err, nBlocks)
+					logger.Errorf("failed to write %d blocks on completion, nBlocksWritten=%d,  err=%s", len(buf), nBlocks, err)
 					return nil, err
 				}
 				nBlocks = nBlocks + len(buf)
@@ -233,17 +233,17 @@ func loadCarFast(s batchStore, cr *CarReader) (*CarHeader, error) {
 			logger.Debugf("successfully loaded CAR, nBlocksWritten=%d", nBlocks)
 			return cr.Header, nil
 		default:
-			logger.Errorf("failed to load car, err=%s, nBlocksWritten=%d", err, nBlocks)
+			logger.Errorf("failed to load car, nBlocksWritten=%d, err=%s", nBlocks, err)
 			return nil, err
 		case nil:
 		}
 
 		buf = append(buf, blk)
-		logger.Debugf("queued for writing to blockstore, cid=%s", blk.Cid())
+		logger.Debugf("queued for writing to blockstore, cid=%s, nBlocksWritten=%d, current buffer size=%d", blk.Cid(), nBlocks, len(buf))
 
 		if len(buf) > 1000 {
 			if err := s.PutMany(buf); err != nil {
-				logger.Errorf("failed to write %d blocks, err=%s, nBlocksWritten=%d", len(buf), err, nBlocks)
+				logger.Errorf("failed to write %d blocks, nBlocksWritten=%d, err=%s", len(buf), nBlocks, err)
 				return nil, err
 			}
 			nBlocks = nBlocks + len(buf)
