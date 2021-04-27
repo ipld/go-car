@@ -13,10 +13,13 @@ import (
 	posinfo "github.com/ipfs/go-ipfs-posinfo"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
+	"github.com/ipfs/go-log"
 	dag "github.com/ipfs/go-merkledag"
 
 	util "github.com/ipld/go-car/util"
 )
+
+var logger = log.Logger("go-car")
 
 func init() {
 	cbor.RegisterCborType(CarHeader{})
@@ -197,19 +200,23 @@ type batchStore interface {
 }
 
 func LoadCar(s Store, r io.Reader) (*CarHeader, error) {
+	logger.Info("will load car now")
 	cr, err := NewCarReader(r)
 	if err != nil {
 		return nil, err
 	}
 
 	if bs, ok := s.(batchStore); ok {
+		logger.Info("will load car fast")
 		return loadCarFast(bs, cr)
 	}
 
+	logger.Info("will load car slow")
 	return loadCarSlow(s, cr)
 }
 
 func loadCarFast(s batchStore, cr *CarReader) (*CarHeader, error) {
+	nBlocks := 0
 	var buf []blocks.Block
 	for {
 		blk, err := cr.Next()
@@ -217,40 +224,54 @@ func loadCarFast(s batchStore, cr *CarReader) (*CarHeader, error) {
 		case io.EOF:
 			if len(buf) > 0 {
 				if err := s.PutMany(buf); err != nil {
+					logger.Errorf("failed to write %d blocks on completion, err=%s, nBlocksWritten=%d", len(buf), err, nBlocks)
 					return nil, err
 				}
+				nBlocks = nBlocks + len(buf)
 			}
+
+			logger.Debugf("successfully loaded CAR, nBlocksWritten=%d", nBlocks)
 			return cr.Header, nil
 		default:
+			logger.Errorf("failed to load car, err=%s, nBlocksWritten=%d", err, nBlocks)
 			return nil, err
 		case nil:
 		}
 
 		buf = append(buf, blk)
+		logger.Debugf("queued for writing to blockstore, cid=%s", blk.Cid())
 
 		if len(buf) > 1000 {
 			if err := s.PutMany(buf); err != nil {
+				logger.Errorf("failed to write %d blocks, err=%s, nBlocksWritten=%d", len(buf), err, nBlocks)
 				return nil, err
 			}
+			nBlocks = nBlocks + len(buf)
 			buf = buf[:0]
 		}
 	}
 }
 
 func loadCarSlow(s Store, cr *CarReader) (*CarHeader, error) {
-
+	nBlocks := 0
 	for {
 		blk, err := cr.Next()
 		switch err {
 		case io.EOF:
+			logger.Debugf("loaded CAR successfully, nBlocksWritten=%d", nBlocks)
 			return cr.Header, nil
 		default:
+			logger.Errorf("failed to load CAR, err=%s, nBlocksWritten=%d", err, nBlocks)
 			return nil, err
 		case nil:
 		}
 
 		if err := s.Put(blk); err != nil {
+			logger.Errorf("failed to write block with cid=%s to the blockstore, err=%s, nBlocksWritten=%d", blk.Cid(), err, nBlocks)
 			return nil, err
 		}
+
+		nBlocks++
+		logger.Debugf("successfully wrote block with cid=%s to the blockstore", blk.Cid())
 	}
 }

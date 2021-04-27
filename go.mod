@@ -11,6 +11,7 @@ require (
 	github.com/ipfs/go-ipfs-posinfo v0.0.1
 	github.com/ipfs/go-ipld-cbor v0.0.4
 	github.com/ipfs/go-ipld-format v0.2.0
+	github.com/ipfs/go-log v1.0.2
 	github.com/ipfs/go-merkledag v0.3.2
 	github.com/ipld/go-ipld-prime v0.5.1-0.20200828233916-988837377a7f
 	github.com/ipld/go-ipld-prime-proto v0.0.0-20200922192210-9a2bfd4440a6
