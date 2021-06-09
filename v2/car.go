@@ -1,5 +1,10 @@
 package car
 
+import (
+	"encoding/binary"
+	"io"
+)
+
 const HeaderBytesLen uint64 = 32
 
 var (
@@ -29,3 +34,37 @@ type (
 	}
 	Characteristics []byte
 )
+
+// NewHeader instantiates a new CAR v2 header, given the byte length of a CAR v1.
+func NewHeader(carV1Len uint64) *Header {
+	return &Header{
+		Characteristics: EmptyCharacteristics,
+		CarV1Len:        carV1Len,
+	}
+}
+
+// WithPadding sets the index offset from the beginning of the file for this header and returns the
+// header for convenient chained calls.
+// The index offset is calculated as the sum of PrefixBytesLen, HeaderBytesLen,
+// Header#CarV1Len, and the given padding.
+func (h *Header) WithPadding(padding uint64) *Header {
+	h.IndexOffset = PrefixBytesLen + HeaderBytesLen + h.CarV1Len + padding
+	return h
+}
+
+// Marshal serializes this header to bytes and writes the bytes using the given io.Writer.
+func (h *Header) Marshal(w io.Writer) (err error) {
+	chars := h.Characteristics
+	if chars == nil {
+		chars = EmptyCharacteristics
+	}
+	_, err = w.Write(chars)
+	if err != nil {
+		return
+	}
+	err = binary.Write(w, binary.LittleEndian, h.CarV1Len)
+	if err != nil {
+		return
+	}
+	return binary.Write(w, binary.LittleEndian, h.IndexOffset)
+}
