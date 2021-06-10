@@ -8,7 +8,7 @@ import (
 const HeaderBytesLen uint64 = 32
 
 var (
-	// The fixed prefix of a CAR v2, signalling the version number to previois versoions for graceful fail over.
+	// The fixed prefix of a CAR v2, signalling the version number to previous implementations for graceful fail over.
 	PrefixBytes = []byte{
 		0x0a,                                     // unit(10)
 		0xa1,                                     // map(1)
