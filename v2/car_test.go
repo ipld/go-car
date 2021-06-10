@@ -75,7 +75,7 @@ func TestEmptyCharacteristics(t *testing.T) {
 }
 
 func TestHeader_SizeIs40Bytes(t *testing.T) {
-	assert.Equal(t, uint64(40), new(car_v2.Header).Size())
+	assert.Equal(t, car_v2.HeaderBytesSize, new(car_v2.Header).Size())
 }
 
 func TestHeader_Marshal(t *testing.T) {

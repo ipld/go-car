@@ -88,8 +88,8 @@ func (h *Header) Size() uint64 {
 // header for convenient chained calls.
 // The index offset is calculated as the sum of PrefixBytesLen, HeaderBytesLen,
 // Header#CarV1Len, and the given padding.
-func (h *Header) WithIndexPadding(padding uint64) *Header {
-	h.IndexOffset = h.IndexOffset + padding
+func (h *Header) WithIndexPadding(padding Padding) *Header {
+	h.IndexOffset = h.IndexOffset + uint64(padding)
 	return h
 }
 
@@ -97,9 +97,9 @@ func (h *Header) WithIndexPadding(padding uint64) *Header {
 // header for convenient chained calls.
 // The CAR v1 offset is calculated as the sum of PrefixBytesLen, HeaderBytesLen and the given padding.
 // The call to this function also shifts the Header#IndexOffset forward by the given padding.
-func (h *Header) WithCarV1Padding(padding uint64) *Header {
-	h.CarV1Offset = h.CarV1Offset + padding
-	h.IndexOffset = h.IndexOffset + padding
+func (h *Header) WithCarV1Padding(padding Padding) *Header {
+	h.CarV1Offset = h.CarV1Offset + uint64(padding)
+	h.IndexOffset = h.IndexOffset + uint64(padding)
 	return h
 }
 
