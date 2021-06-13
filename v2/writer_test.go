@@ -15,23 +15,30 @@ import (
 func TestPadding_WriteTo(t *testing.T) {
 	tests := []struct {
 		name      string
-		padding   Padding
+		padding   padding
 		wantBytes []byte
 		wantN     int64
 		wantErr   bool
 	}{
 		{
-			"zero padding is no bytes",
-			Padding(0),
+			"ZeroPaddingIsNoBytes",
+			padding(0),
 			nil,
 			0,
 			false,
 		},
 		{
-			"non-zero padding is corresponding zero-value bytes",
-			Padding(3),
+			"NonZeroPaddingIsCorrespondingZeroValueBytes",
+			padding(3),
 			[]byte{0x00, 0x00, 0x00},
 			3,
+			false,
+		},
+		{
+			"PaddingLargerThanTheBulkPaddingSizeIsCorrespondingZeroValueBytes",
+			padding(1025),
+			make([]byte, 1025),
+			1025,
 			false,
 		},
 	}
