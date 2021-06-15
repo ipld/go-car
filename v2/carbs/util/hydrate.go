@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/ipld/go-car/v2/carbs"
 	"os"
 
+	"github.com/ipld/go-car/v2/carbs"
 	"golang.org/x/exp/mmap"
 )
 
