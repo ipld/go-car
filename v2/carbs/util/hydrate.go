@@ -45,7 +45,5 @@ func main() {
 
 	if err := carbs.Save(idx, db); err != nil {
 		fmt.Printf("Error saving : %v\n", err)
-		return
 	}
-	return
 }
