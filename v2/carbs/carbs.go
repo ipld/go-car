@@ -151,7 +151,7 @@ func (c *Carbs) PutMany([]blocks.Block) error {
 func (c *Carbs) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
 	header, err := car.ReadHeader(bufio.NewReader(&unatreader{c.backing, 0}))
 	if err != nil {
-		return nil, fmt.Errorf("Error reading car header: %w", err)
+		return nil, fmt.Errorf("error reading car header: %w", err)
 	}
 	offset, err := car.HeaderSize(header)
 	if err != nil {
@@ -163,7 +163,7 @@ func (c *Carbs) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
 		done := ctx.Done()
 
 		rdr := unatreader{c.backing, int64(offset)}
-		for true {
+		for {
 			l, err := binary.ReadUvarint(&rdr)
 			thisItemForNxt := rdr.at
 			if err != nil {
@@ -187,15 +187,14 @@ func (c *Carbs) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
 }
 
 // HashOnRead does nothing
-func (c *Carbs) HashOnRead(enabled bool) {
-	return
+func (c *Carbs) HashOnRead(bool) {
 }
 
 // Roots returns the root CIDs of the backing car
 func (c *Carbs) Roots() ([]cid.Cid, error) {
 	header, err := car.ReadHeader(bufio.NewReader(&unatreader{c.backing, 0}))
 	if err != nil {
-		return nil, fmt.Errorf("Error reading car header: %w", err)
+		return nil, fmt.Errorf("error reading car header: %w", err)
 	}
 	return header.Roots, nil
 }
@@ -246,7 +245,7 @@ func GenerateIndex(store io.ReaderAt, size int64, codec IndexCodec, verbose bool
 
 	header, err := car.ReadHeader(bufio.NewReader(&unatreader{store, 0}))
 	if err != nil {
-		return nil, fmt.Errorf("Error reading car header: %w", err)
+		return nil, fmt.Errorf("error reading car header: %w", err)
 	}
 	offset, err := car.HeaderSize(header)
 	if err != nil {
@@ -258,7 +257,7 @@ func GenerateIndex(store io.ReaderAt, size int64, codec IndexCodec, verbose bool
 
 	records := make([]Record, 0)
 	rdr := unatreader{store, int64(offset)}
-	for true {
+	for {
 		thisItemIdx := rdr.at
 		l, err := binary.ReadUvarint(&rdr)
 		bar.Add64(int64(l))
