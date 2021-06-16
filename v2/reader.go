@@ -3,25 +3,22 @@ package car
 import (
 	"bufio"
 	"fmt"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"io"
 
 	carv1 "github.com/ipld/go-car"
-	"github.com/ipld/go-car/v2/carbs"
 )
 
-const (
-	version2   = 2
-	indexCodec = carbs.IndexSorted
-)
+const version2 = 2
 
-type (
-	Reader struct {
-		Header Header
-		r      io.ReaderAt
-	}
-)
+// Reader represents a reader of CAR v2.
+type Reader struct {
+	Header Header
+	r      io.ReaderAt
+}
 
+// NewReader constructs a new reader that reads CAR v2 from the given r.
+// Upon instantiation, the reader inspects the payload by reading the first 11 bytes and will return
+// an error if the payload does not represent a CAR v2.
 func NewReader(r io.ReaderAt) (*Reader, error) {
 	cr := &Reader{
 		r: r,
@@ -36,8 +33,8 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 }
 
 func (r *Reader) readPrefix() (err error) {
-	prefixSection := r.prefixReader()
-	header, err := carv1.ReadHeader(bufio.NewReader(prefixSection))
+	pr := io.NewSectionReader(r.r, 0, PrefixSize)
+	header, err := carv1.ReadHeader(bufio.NewReader(pr))
 	if err != nil {
 		return
 	}
@@ -47,47 +44,18 @@ func (r *Reader) readPrefix() (err error) {
 	return
 }
 
-func (r *Reader) prefixReader() *io.SectionReader {
-	return io.NewSectionReader(r.r, 0, PrefixBytesSize)
-}
-
 func (r *Reader) readHeader() (err error) {
-	headerSection := r.headerReader()
+	headerSection := io.NewSectionReader(r.r, PrefixSize, HeaderSize)
 	_, err = r.Header.ReadFrom(headerSection)
 	return
 }
 
-func (r *Reader) headerReader() *io.SectionReader {
-	return io.NewSectionReader(r.r, PrefixBytesSize, HeaderBytesSize)
-}
-
-func (r *Reader) CarV1() (*carv1.CarReader, error) {
-	carV1Section := r.carV1Reader()
-	return carv1.NewCarReader(bufio.NewReader(carV1Section))
-}
-
-func (r *Reader) carV1Reader() *io.SectionReader {
+// CarV1ReaderAt provides an io.ReaderAt containing the CAR v1 dump encapsulated in this CAR v2.
+func (r *Reader) CarV1ReaderAt() io.ReaderAt {
 	return io.NewSectionReader(r.r, int64(r.Header.CarV1Offset), int64(r.Header.CarV1Size))
 }
 
-func (r *Reader) Index() (carbs.Index, error) {
-	// TODO add codec to the index written into the CAR v2 so that we can infer codec automatically.
-	indexCls, ok := carbs.IndexAtlas[indexCodec]
-	if !ok {
-		return nil, fmt.Errorf("unknown index codec: %#v", indexCodec)
-	}
-	index := indexCls()
-	indexSection := NewOffsetReader(r.r, int64(r.Header.IndexOffset), 0)
-	if err := index.Unmarshal(indexSection); err != nil {
-		return nil, err
-	}
-	return index, nil
-}
-
-func (r *Reader) BlockStore() (blockstore.Blockstore, error) {
-	index, err := r.Index()
-	if err != nil {
-		return nil, err
-	}
-	return carbs.Of(r.carV1Reader(), index), nil
+// IndexReaderAt provides an io.ReaderAt containing the carbs.Index of this CAR v2.
+func (r *Reader) IndexReaderAt() io.ReaderAt {
+	return NewOffsetReader(r.r, int64(r.Header.IndexOffset))
 }
