@@ -6,6 +6,8 @@ import (
 )
 
 const (
+	// The size of the CAR v2 prefix in 11 bytes, (i.e. 11).
+	PrefixBytesSize = 11
 	// HeaderBytesSize is the fixed size of CAR v2 header in number of bytes.
 	HeaderBytesSize = 40
 	// CharacteristicsBytesSize is the fixed size of Characteristics bitfield within CAR v2 header in number of bytes.
@@ -22,8 +24,6 @@ var (
 		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, // "version"
 		0x02, // uint(2)
 	}
-	// The size of the CAR v2 prefix in 11 bytes, (i.e. 11).
-	prefixBytesSize = uint64(len(PrefixBytes))
 )
 
 type (
@@ -47,11 +47,23 @@ type (
 
 // WriteTo writes this characteristics to the given writer.
 func (c Characteristics) WriteTo(w io.Writer) (n int64, err error) {
-	if err = writeUint64To(w, c.Hi); err != nil {
+	if err = binary.Write(w, binary.LittleEndian, c.Hi); err != nil {
 		return
 	}
 	n += uint64BytesSize
-	if err = writeUint64To(w, c.Lo); err != nil {
+	if err = binary.Write(w, binary.LittleEndian, c.Lo); err != nil {
+		return
+	}
+	n += uint64BytesSize
+	return
+}
+
+func (c Characteristics) ReadFrom(r io.Reader) (n int64, err error) {
+	if err = binary.Read(r, binary.LittleEndian, &c.Hi); err != nil {
+		return
+	}
+	n += uint64BytesSize
+	if err = binary.Read(r, binary.LittleEndian, &c.Lo); err != nil {
 		return
 	}
 	n += uint64BytesSize
@@ -63,7 +75,7 @@ func NewHeader(carV1Size uint64) Header {
 	header := Header{
 		CarV1Size: carV1Size,
 	}
-	header.CarV1Offset = prefixBytesSize + HeaderBytesSize
+	header.CarV1Offset = PrefixBytesSize + HeaderBytesSize
 	header.IndexOffset = header.CarV1Offset + carV1Size
 	return header
 }
@@ -94,21 +106,38 @@ func (h Header) WriteTo(w io.Writer) (n int64, err error) {
 		return
 	}
 	n += wn
-	if err = writeUint64To(w, h.CarV1Offset); err != nil {
+	if err = binary.Write(w, binary.LittleEndian, h.CarV1Offset); err != nil {
 		return
 	}
 	n += uint64BytesSize
-	if err = writeUint64To(w, h.CarV1Size); err != nil {
+	if err = binary.Write(w, binary.LittleEndian, h.CarV1Size); err != nil {
 		return
 	}
 	n += uint64BytesSize
-	if err = writeUint64To(w, h.IndexOffset); err != nil {
+	if err = binary.Write(w, binary.LittleEndian, h.IndexOffset); err != nil {
 		return
 	}
 	n += uint64BytesSize
 	return
 }
 
-func writeUint64To(w io.Writer, v uint64) error {
-	return binary.Write(w, binary.LittleEndian, v)
+func (h Header) ReadFrom(r io.Reader) (n int64, err error) {
+	rn, err := h.Characteristics.ReadFrom(r)
+	if err != nil {
+		return
+	}
+	n += rn
+	if err = binary.Read(r, binary.LittleEndian, &h.CarV1Offset); err != nil {
+		return
+	}
+	n += uint64BytesSize
+	if err = binary.Read(r, binary.LittleEndian, &h.CarV1Size); err != nil {
+		return
+	}
+	n += uint64BytesSize
+	if err = binary.Read(r, binary.LittleEndian, &h.IndexOffset); err != nil {
+		return
+	}
+	n += uint64BytesSize
+	return
 }
