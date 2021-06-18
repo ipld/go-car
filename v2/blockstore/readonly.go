@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/mmap"
 	"io"
 
 	blocks "github.com/ipfs/go-block-format"
@@ -16,28 +15,27 @@ import (
 	"github.com/ipld/go-car/util"
 	"github.com/ipld/go-car/v2/internal/index"
 	internalio "github.com/ipld/go-car/v2/internal/io"
+	"golang.org/x/exp/mmap"
 )
 
-var _ blockstore.Blockstore = (*ReadOnlyBlockStore)(nil)
+var _ blockstore.Blockstore = (*ReadOnly)(nil)
 
 // errUnsupported is returned for unsupported operations
 var errUnsupported = errors.New("unsupported operation")
 
-type (
-	// ReadOnlyBlockStore provides a read-only Car Block Store.
-	ReadOnlyBlockStore struct {
-		backing io.ReaderAt
-		idx     index.Index
-	}
-)
+// ReadOnly provides a read-only Car Block Store.
+type ReadOnly struct {
+	backing io.ReaderAt
+	idx     index.Index
+}
 
 // ReadOnlyOf opens a carbs data store from an existing reader of the base data and index
-func ReadOnlyOf(backing io.ReaderAt, index index.Index) *ReadOnlyBlockStore {
-	return &ReadOnlyBlockStore{backing, index}
+func ReadOnlyOf(backing io.ReaderAt, index index.Index) *ReadOnly {
+	return &ReadOnly{backing, index}
 }
 
 // LoadReadOnly opens a read-only blockstore, generating an index if it does not exist
-func LoadReadOnly(path string, noPersist bool) (*ReadOnlyBlockStore, error) {
+func LoadReadOnly(path string, noPersist bool) (*ReadOnly, error) {
 	reader, err := mmap.Open(path)
 	if err != nil {
 		return nil, err
@@ -54,25 +52,25 @@ func LoadReadOnly(path string, noPersist bool) (*ReadOnlyBlockStore, error) {
 			}
 		}
 	}
-	obj := ReadOnlyBlockStore{
+	obj := ReadOnly{
 		backing: reader,
 		idx:     idx,
 	}
 	return &obj, nil
 }
 
-func (b *ReadOnlyBlockStore) read(idx int64) (cid.Cid, []byte, error) {
+func (b *ReadOnly) read(idx int64) (cid.Cid, []byte, error) {
 	bcid, data, err := util.ReadNode(bufio.NewReader(internalio.NewOffsetReader(b.backing, idx)))
 	return bcid, data, err
 }
 
 // DeleteBlock is unsupported and always returns an error
-func (b *ReadOnlyBlockStore) DeleteBlock(_ cid.Cid) error {
+func (b *ReadOnly) DeleteBlock(_ cid.Cid) error {
 	return errUnsupported
 }
 
 // Has indicates if the store has a cid
-func (b *ReadOnlyBlockStore) Has(key cid.Cid) (bool, error) {
+func (b *ReadOnly) Has(key cid.Cid) (bool, error) {
 	offset, err := b.idx.Get(key)
 	if err != nil {
 		return false, err
@@ -90,7 +88,7 @@ func (b *ReadOnlyBlockStore) Has(key cid.Cid) (bool, error) {
 }
 
 // Get gets a block from the store
-func (b *ReadOnlyBlockStore) Get(key cid.Cid) (blocks.Block, error) {
+func (b *ReadOnly) Get(key cid.Cid) (blocks.Block, error) {
 	offset, err := b.idx.Get(key)
 	if err != nil {
 		return nil, err
@@ -107,7 +105,7 @@ func (b *ReadOnlyBlockStore) Get(key cid.Cid) (blocks.Block, error) {
 }
 
 // GetSize gets how big a item is
-func (b *ReadOnlyBlockStore) GetSize(key cid.Cid) (int, error) {
+func (b *ReadOnly) GetSize(key cid.Cid) (int, error) {
 	idx, err := b.idx.Get(key)
 	if err != nil {
 		return -1, err
@@ -128,17 +126,18 @@ func (b *ReadOnlyBlockStore) GetSize(key cid.Cid) (int, error) {
 }
 
 // Put is not supported and always returns an error
-func (b *ReadOnlyBlockStore) Put(blocks.Block) error {
+func (b *ReadOnly) Put(blocks.Block) error {
 	return errUnsupported
 }
 
 // PutMany is not supported and always returns an error
-func (b *ReadOnlyBlockStore) PutMany([]blocks.Block) error {
+func (b *ReadOnly) PutMany([]blocks.Block) error {
 	return errUnsupported
 }
 
 // AllKeysChan returns the list of keys in the store
-func (b *ReadOnlyBlockStore) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
+func (b *ReadOnly) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
+	// TODO we may use this walk for populating the index, and we need to be able to iterate keys in this way somewhere for index generation. In general though, when it's asked for all keys from a blockstore with an index, we should iterate through the index when possible rather than linear reads through the full car.
 	header, err := carv1.ReadHeader(bufio.NewReader(internalio.NewOffsetReader(b.backing, 0)))
 	if err != nil {
 		return nil, fmt.Errorf("error reading car header: %w", err)
@@ -177,11 +176,11 @@ func (b *ReadOnlyBlockStore) AllKeysChan(ctx context.Context) (<-chan cid.Cid, e
 }
 
 // HashOnRead does nothing
-func (b *ReadOnlyBlockStore) HashOnRead(bool) {
+func (b *ReadOnly) HashOnRead(bool) {
 }
 
 // Roots returns the root CIDs of the backing car
-func (b *ReadOnlyBlockStore) Roots() ([]cid.Cid, error) {
+func (b *ReadOnly) Roots() ([]cid.Cid, error) {
 	header, err := carv1.ReadHeader(bufio.NewReader(internalio.NewOffsetReader(b.backing, 0)))
 	if err != nil {
 		return nil, fmt.Errorf("error reading car header: %w", err)

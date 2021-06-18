@@ -3,12 +3,12 @@ package car
 import (
 	"bytes"
 	"context"
-	"github.com/ipld/go-car/v2/internal/index"
 	"io"
 
 	"github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
 	carv1 "github.com/ipld/go-car"
+	"github.com/ipld/go-car/v2/internal/index"
 )
 
 const bulkPaddingBytesSize = 1024

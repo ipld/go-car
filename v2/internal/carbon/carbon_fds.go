@@ -15,7 +15,7 @@ import (
 type carbonFD struct {
 	path        string
 	writeHandle *poswriter
-	blockstore.ReadOnlyBlockStore
+	blockstore.ReadOnly
 	idx *index.InsertionIndex
 }
 
