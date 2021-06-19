@@ -42,6 +42,13 @@ type (
 	}
 )
 
+// HasIndex indicates whether the index is present.
+func (c Characteristics) HasIndex() bool {
+	// Always true because in current implementation we always write the index.
+	// TODO change this when writer (and blockstore) provide config on whether to write the index.
+	return true
+}
+
 // WriteTo writes this characteristics to the given w.
 func (c Characteristics) WriteTo(w io.Writer) (n int64, err error) {
 	buf := make([]byte, 16)
