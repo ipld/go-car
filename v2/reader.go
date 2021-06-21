@@ -7,8 +7,8 @@ import (
 
 	internalio "github.com/ipld/go-car/v2/internal/io"
 
-	carv1 "github.com/ipld/go-car"
 	"github.com/ipfs/go-cid"
+	carv1 "github.com/ipld/go-car"
 )
 
 const version2 = 2

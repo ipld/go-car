@@ -43,13 +43,6 @@ type (
 	}
 )
 
-// HasIndex indicates whether the index is present.
-func (c Characteristics) HasIndex() bool {
-	// Always true because in current implementation we always write the index.
-	// TODO change this when writer (and blockstore) provide config on whether to write the index.
-	return true
-}
-
 // WriteTo writes this characteristics to the given w.
 func (c Characteristics) WriteTo(w io.Writer) (n int64, err error) {
 	buf := make([]byte, 16)
@@ -98,6 +91,11 @@ func (h Header) WithCarV1Padding(padding uint64) Header {
 	h.CarV1Offset = h.CarV1Offset + padding
 	h.IndexOffset = h.IndexOffset + padding
 	return h
+}
+
+// HasIndex indicates whether the index is present.
+func (h Header) HasIndex() bool {
+	return h.IndexOffset != 0
 }
 
 // WriteTo serializes this header as bytes and writes them using the given io.Writer.
