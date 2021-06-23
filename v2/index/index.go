@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	internalio "github.com/ipld/go-car/v2/internal/io"
+
 	"github.com/ipfs/go-cid"
 )
 
@@ -59,6 +61,17 @@ func Save(i Index, path string) error {
 	}
 	defer stream.Close()
 	return WriteTo(i, stream)
+}
+
+// Attach attaches a given index to an existing car v2 file at given path and offset.
+func Attach(path string, idx Index, offset uint64) error {
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	indexWriter := internalio.NewOffsetWriter(out, int64(offset))
+	return WriteTo(idx, indexWriter)
 }
 
 func WriteTo(i Index, w io.Writer) error {
