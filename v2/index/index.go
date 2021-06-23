@@ -54,13 +54,13 @@ var IndexAtlas = map[Codec]IndexCls{
 }
 
 // Save writes a generated index into the given `path` as a file with a `.idx` extension.
-func Save(i Index, path string) error {
+func Save(idx Index, path string) error {
 	stream, err := os.OpenFile(path+".idx", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
-	return WriteTo(i, stream)
+	return WriteTo(idx, stream)
 }
 
 // Attach attaches a given index to an existing car v2 file at given path and offset.
