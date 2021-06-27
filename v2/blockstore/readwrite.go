@@ -57,6 +57,9 @@ func WithIndexPadding(p uint64) Option {
 	}
 }
 
+// TODO When we are constructing a UnxFS DAG from a user file using this read-write blockstore as the staging store,
+// we might not have the root Cid will we finalise.
+// Please can we add an option to skip the root here and give it when we finalize the DAG ?
 // NewReadWrite creates a new ReadWrite at the given path with a provided set of root CIDs as the car roots.
 func NewReadWrite(path string, roots []cid.Cid, opts ...Option) (*ReadWrite, error) {
 	// TODO support resumption if the path provided contains partially written blocks in v2 format.
@@ -125,6 +128,10 @@ func (b *ReadWrite) isFinalized() bool {
 	return b.header.CarV1Size != 0
 }
 
+// TODO
+// 1. Can we consider finalize to be the `Close` of the read write blockstore ?
+// 2. Are Finalize/close idempotent ? Can we call them multiple times without side-effects/errors ?
+//
 // Finalize finalizes this blockstore by writing the CAR v2 header, along with flattened index
 // for more efficient subsequent read.
 // After this call, this blockstore can no longer be used for read or write.

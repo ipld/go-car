@@ -89,6 +89,7 @@ func (b *ReadOnly) DeleteBlock(_ cid.Cid) error {
 func (b *ReadOnly) Has(key cid.Cid) (bool, error) {
 	offset, err := b.idx.Get(key)
 	if err != nil {
+		fmt.Printf("\n not in index, cid=%s", key)
 		return false, err
 	}
 	uar := internalio.NewOffsetReader(b.backing, int64(offset))
@@ -165,6 +166,8 @@ func (b *ReadOnly) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
 
 	ch := make(chan cid.Cid, 5)
 	go func() {
+		// TODO We should close this channel to prevent a hang.
+		defer close(ch)
 		done := ctx.Done()
 
 		rdr := internalio.NewOffsetReader(b.backing, int64(offset))
