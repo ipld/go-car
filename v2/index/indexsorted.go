@@ -8,13 +8,12 @@ import (
 	"sort"
 
 	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multihash"
 )
 
 type (
 	digestRecord struct {
-		digest []byte
-		index  uint64
+		hash  []byte
+		index uint64
 	}
 	recordSet        []digestRecord
 	singleWidthIndex struct {
@@ -26,7 +25,7 @@ type (
 )
 
 func (d digestRecord) write(buf []byte) {
-	n := copy(buf[:], d.digest)
+	n := copy(buf[:], d.hash)
 	binary.LittleEndian.PutUint64(buf[n:], d.index)
 }
 
@@ -35,7 +34,7 @@ func (r recordSet) Len() int {
 }
 
 func (r recordSet) Less(i, j int) bool {
-	return bytes.Compare(r[i].digest, r[j].digest) < 0
+	return bytes.Compare(r[i].hash, r[j].hash) < 0
 }
 
 func (r recordSet) Swap(i, j int) {
@@ -70,16 +69,12 @@ func (s *singleWidthIndex) Unmarshal(r io.Reader) error {
 	return err
 }
 
-func (s *singleWidthIndex) Less(i int, digest []byte) bool {
-	return bytes.Compare(digest[:], s.index[i*int(s.width):((i+1)*int(s.width)-8)]) <= 0
+func (s *singleWidthIndex) Less(i int, hash []byte) bool {
+	return bytes.Compare(hash[:], s.index[i*int(s.width):((i+1)*int(s.width)-8)]) <= 0
 }
 
 func (s *singleWidthIndex) Get(c cid.Cid) (uint64, error) {
-	d, err := multihash.Decode(c.Hash())
-	if err != nil {
-		return 0, err
-	}
-	return s.get(d.Digest), nil
+	return s.get(c.Hash()), nil
 }
 
 func (s *singleWidthIndex) get(d []byte) uint64 {
@@ -113,12 +108,9 @@ func (s *singleWidthIndex) Load(items []Record) error {
 }
 
 func (m *multiWidthIndex) Get(c cid.Cid) (uint64, error) {
-	d, err := multihash.Decode(c.Hash())
-	if err != nil {
-		return 0, err
-	}
-	if s, ok := (*m)[uint32(len(d.Digest)+8)]; ok {
-		return s.get(d.Digest), nil
+	hash := c.Hash()
+	if s, ok := (*m)[uint32(len(hash)+8)]; ok {
+		return s.get(hash), nil
 	}
 	return 0, errNotFound
 }
@@ -151,20 +143,16 @@ func (m *multiWidthIndex) Unmarshal(r io.Reader) error {
 }
 
 func (m *multiWidthIndex) Load(items []Record) error {
-	// Split cids on their digest length
+	// Split cids on their hash length
 	idxs := make(map[int][]digestRecord)
 	for _, item := range items {
-		decHash, err := multihash.Decode(item.Hash())
-		if err != nil {
-			return err
-		}
-		digest := decHash.Digest
-		idx, ok := idxs[len(digest)]
+		hash := item.Hash()
+		idx, ok := idxs[len(hash)]
 		if !ok {
-			idxs[len(digest)] = make([]digestRecord, 0)
-			idx = idxs[len(digest)]
+			idxs[len(hash)] = make([]digestRecord, 0)
+			idx = idxs[len(hash)]
 		}
-		idxs[len(digest)] = append(idx, digestRecord{digest, item.Idx})
+		idxs[len(hash)] = append(idx, digestRecord{hash, item.Idx})
 	}
 
 	// Sort each list. then write to compact form.

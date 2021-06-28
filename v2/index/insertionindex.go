@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multihash"
 	"github.com/petar/GoLLRB/llrb"
 	cbor "github.com/whyrusleeping/cbor/go"
 )
@@ -21,7 +20,7 @@ func (ii *InsertionIndex) InsertNoReplace(key cid.Cid, n uint64) {
 }
 
 type recordDigest struct {
-	digest []byte
+	hash []byte
 	Record
 }
 
@@ -30,33 +29,19 @@ func (r recordDigest) Less(than llrb.Item) bool {
 	if !ok {
 		return false
 	}
-	return bytes.Compare(r.digest, other.digest) < 0
+	return bytes.Compare(r.hash, other.hash) < 0
 }
 
 func mkRecord(r Record) recordDigest {
-	d, err := multihash.Decode(r.Hash())
-	if err != nil {
-		return recordDigest{}
-	}
-
-	return recordDigest{d.Digest, r}
+	return recordDigest{r.Hash(), r}
 }
 
 func mkRecordFromCid(c cid.Cid, at uint64) recordDigest {
-	d, err := multihash.Decode(c.Hash())
-	if err != nil {
-		return recordDigest{}
-	}
-
-	return recordDigest{d.Digest, Record{Cid: c, Idx: at}}
+	return recordDigest{c.Hash(), Record{Cid: c, Idx: at}}
 }
 
 func (ii *InsertionIndex) Get(c cid.Cid) (uint64, error) {
-	d, err := multihash.Decode(c.Hash())
-	if err != nil {
-		return 0, err
-	}
-	entry := recordDigest{digest: d.Digest}
+	entry := recordDigest{hash: c.Hash()}
 	e := ii.items.Get(entry)
 	if e == nil {
 		return 0, errNotFound
@@ -110,7 +95,7 @@ func (ii *InsertionIndex) Codec() Codec {
 func (ii *InsertionIndex) Load(rs []Record) error {
 	for _, r := range rs {
 		rec := mkRecord(r)
-		if rec.digest == nil {
+		if rec.hash == nil {
 			return fmt.Errorf("invalid entry: %v", r)
 		}
 		ii.items.InsertNoReplace(rec)
