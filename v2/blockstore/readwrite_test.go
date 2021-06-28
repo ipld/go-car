@@ -64,13 +64,11 @@ func TestBlockstore(t *testing.T) {
 		}
 	}
 
-	if err := ingester.Finalize(); err != nil {
-		t.Fatal(err)
-	}
-	carb, err := blockstore.OpenReadOnly(path, false)
+	carb, err := ingester.Finalize()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer carb.Close()
 
 	allKeysCh, err := carb.AllKeysChan(ctx)
 	if err != nil {

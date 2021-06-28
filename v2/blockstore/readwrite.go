@@ -120,25 +120,43 @@ func (b *ReadWrite) PutMany(blks []blocks.Block) error {
 	return nil
 }
 
-// Finalize finalizes this blockstore by writing the CAR v2 header, along with flattened index
-// for more efficient subsequent read.
-// After this call, this blockstore can no longer be used for read or write.
-func (b *ReadWrite) Finalize() error {
+// Finalize finalizes this blockstore by writing the CAR v2 header,
+// along with flattened index for more efficient subsequent read.
+//
+// After the call, this blockstore can no longer be used.
+// If a nil error is returned, the resulting blockstore can be used for
+// read-only operations.
+// Note that the read-only blockstore keeps the underlying file open
+// until ReadOnly.Close is called.
+func (b *ReadWrite) Finalize() (*ReadOnly, error) {
 	b.panicIfFinalized()
 
 	// TODO check if add index option is set and don't write the index then set index offset to zero.
-	// TODO see if folks need to continue reading from a finalized blockstore, if so return ReadOnly blockstore here.
 	b.header = b.header.WithCarV1Size(uint64(b.carV1Writer.Position()))
-	defer b.f.Close()
 	if _, err := b.header.WriteTo(internalio.NewOffsetWriter(b.f, carv2.PragmaSize)); err != nil {
-		return err
+		b.f.Close() // don't leak a FD if we don't return an io.Closer
+		return nil, err
 	}
 	// TODO if index not needed don't bother flattening it.
-	fi, err := b.idx.Flatten()
+	flatIndex, err := b.idx.Flatten()
 	if err != nil {
-		return err
+		b.f.Close() // don't leak a FD if we don't return an io.Closer
+		return nil, err
 	}
-	return index.WriteTo(fi, internalio.NewOffsetWriter(b.f, int64(b.header.IndexOffset)))
+	if err := index.WriteTo(flatIndex,
+		internalio.NewOffsetWriter(b.f, int64(b.header.IndexOffset)),
+	); err != nil {
+		b.f.Close() // don't leak a FD if we don't return an io.Closer
+		return nil, err
+	}
+	return &ReadOnly{
+		// The file is open as O_RDWR, but we'll only read from this point.
+		backing: internalio.NewOffsetReader(b.f, int64(b.header.CarV1Offset)),
+		idx:     flatIndex,
+
+		// We haven't closed the file, so ReadOnly.Close should.
+		carv2Closer: b.f,
+	}, nil
 }
 
 func (b *ReadWrite) AllKeysChan(ctx context.Context) (<-chan cid.Cid, error) {
