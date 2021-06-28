@@ -137,3 +137,6 @@ func (h *Header) ReadFrom(r io.Reader) (int64, error) {
 	h.IndexOffset = binary.LittleEndian.Uint64(buf[16:])
 	return n, nil
 }
+
+// TODO: Need a utility to get a CARv2 file from a CARv1 file, basically a CARv1 -> indexed CARv2 transformer func.
+//

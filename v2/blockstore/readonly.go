@@ -52,11 +52,14 @@ func OpenReadOnly(path string, attachIndex bool) (*ReadOnly, error) {
 
 	var idx index.Index
 	if !v2r.Header.HasIndex() {
+
 		idx, err := index.Generate(v2r.CarV1Reader())
 		if err != nil {
 			return nil, err
 		}
 		if attachIndex {
+			// TODO Shouldn't we close the v2r Reader before we open the same file here and write the Index to it.
+			// Can you write to an already opened file and have an open reader pick it up ?
 			if err := index.Attach(path, idx, v2r.Header.IndexOffset); err != nil {
 				return nil, err
 			}
