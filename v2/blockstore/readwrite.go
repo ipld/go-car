@@ -61,6 +61,8 @@ func WithIndexPadding(p uint64) Option {
 // we might not have the root Cid will we finalise.
 // Please can we add an option to skip the root here and give it when we finalize the DAG ?
 // NewReadWrite creates a new ReadWrite at the given path with a provided set of root CIDs as the car roots.
+//
+// TODO We need an option/feature here to avoid writing/Putting duplicates.
 func NewReadWrite(path string, roots []cid.Cid, opts ...Option) (*ReadWrite, error) {
 	// TODO support resumption if the path provided contains partially written blocks in v2 format.
 	// TODO either lock the file or open exclusively; can we do somethign to reduce edge cases.
