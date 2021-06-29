@@ -8,6 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-blockservice"
+	ds "github.com/ipfs/go-datastore"
+	bstore "github.com/ipfs/go-ipfs-blockstore"
+	chunk "github.com/ipfs/go-ipfs-chunker"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	ipldformat "github.com/ipfs/go-ipld-format"
+	"github.com/ipfs/go-merkledag"
+	"github.com/ipfs/go-unixfs/importer/balanced"
+	"github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -17,6 +26,9 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car/v2/internal/carv1"
 )
+
+const unixfsLinksPerLevel = 1024
+const unixfsChunkSize uint64 = 1 << 10
 
 func TestBlockstore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -157,4 +169,78 @@ func TestBlockstorePutSameHashes(t *testing.T) {
 
 	err = wbs.Finalize()
 	require.NoError(t, err)
+}
+
+func TestUnixFSDAGcreation(t *testing.T) {
+	ctx := context.Background()
+
+	// create a Unix FS DAG using a map based blockstore.
+	bs := bstore.NewBlockstore(ds.NewMapDatastore())
+	dag := merkledag.NewDAGService(blockservice.New(bs, offline.Exchange(bs)))
+
+	// import to UnixFS
+	bufferedDS := ipldformat.NewBufferedDAG(ctx, dag)
+
+	params := helpers.DagBuilderParams{
+		Maxlinks:   unixfsLinksPerLevel,
+		RawLeaves:  true,
+		CidBuilder: nil,
+		Dagserv:    bufferedDS,
+	}
+
+	f, err := os.Open("testdata/payload.txt")
+	require.NoError(t, err)
+	defer f.Close()
+
+	db, err := params.New(chunk.NewSizeSplitter(f, int64(unixfsChunkSize)))
+	require.NoError(t, err)
+
+	nd, err := balanced.Layout(db)
+	require.NoError(t, err)
+
+	err = bufferedDS.Commit()
+	require.NoError(t, err)
+
+	require.NoError(t, f.Close())
+
+	// ----- Now that we have the root, generate the same Unix FS DAG Again with a CARv2 read-write blockstore.
+	genWithCARv2Blockstore(t, nd.Cid())
+}
+
+func genWithCARv2Blockstore(t *testing.T, root cid.Cid) {
+	ctx := context.Background()
+
+	tmp, err := os.CreateTemp("", "rand")
+	require.NoError(t, err)
+	require.NoError(t, tmp.Close())
+
+	rw, err := blockstore.NewReadWrite(tmp.Name(), []cid.Cid{root})
+	require.NoError(t, err)
+
+	bsvc := blockservice.New(rw, offline.Exchange(rw))
+	dag := merkledag.NewDAGService(bsvc)
+	// import to UnixFS
+	bufferedDS := ipldformat.NewBufferedDAG(ctx, dag)
+
+	params := helpers.DagBuilderParams{
+		Maxlinks:   unixfsLinksPerLevel,
+		RawLeaves:  true,
+		CidBuilder: nil,
+		Dagserv:    bufferedDS,
+	}
+
+	f, err := os.Open("testdata/payload.txt")
+	require.NoError(t, err)
+
+	db, err := params.New(chunk.NewSizeSplitter(f, int64(unixfsChunkSize)))
+	require.NoError(t, err)
+
+	// TODO: The below lines fail with "not found".
+	_, err = balanced.Layout(db)
+	require.NoError(t, err)
+
+	err = bufferedDS.Commit()
+	require.NoError(t, err)
+
+	require.NoError(t, rw.Finalize())
 }
