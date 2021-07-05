@@ -2,6 +2,7 @@ package index
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -83,8 +84,9 @@ func Attach(path string, idx Index, offset uint64) error {
 // The written bytes include the index encoding.
 // This can then be read back using index.ReadFrom
 func WriteTo(idx Index, w io.Writer) error {
-	b := varint.ToUvarint(uint64(idx.Codec()))
-	if _, err := w.Write(b); err != nil {
+	buf := make([]byte, binary.MaxVarintLen64)
+	b := varint.PutUvarint(buf, uint64(idx.Codec()))
+	if _, err := w.Write(buf[:b]); err != nil {
 		return err
 	}
 	return idx.Marshal(w)
