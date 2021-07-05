@@ -34,7 +34,9 @@ func LdWrite(w io.Writer, d ...[]byte) error {
 		sum += uint64(len(s))
 	}
 
-	_, err := w.Write(varint.ToUvarint(sum))
+	buf := make([]byte, 8)
+	n := varint.PutUvarint(buf, sum)
+	_, err := w.Write(buf[:n])
 	if err != nil {
 		return err
 	}
