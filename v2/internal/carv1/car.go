@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/ipld/go-car/v2/internal/carv1/util"
 
@@ -208,4 +209,9 @@ func loadCarSlow(s Store, cr *CarReader) (*CarHeader, error) {
 			return nil, err
 		}
 	}
+}
+
+func (h CarHeader) Equals(other CarHeader) bool {
+	// TODO should headers with same roots in different order be equal?
+	return reflect.DeepEqual(h, other)
 }
