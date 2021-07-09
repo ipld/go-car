@@ -82,11 +82,12 @@ func WithCidDeduplication(b *ReadWrite) { // TODO should this take a bool and re
 //
 // Resumption is only allowed on files that satisfy the following criteria:
 //   1. start with a complete CAR v2 car.Pragma.
-//   2. contain a complete CAR v1 data header with identical roots, starting at offset specified by
-//      WithCarV1Padding, followed by zero or more complete data frames. If any corrupt data frames
-//      are present the resumption will fail. Note, it is important that new instantiations of
-//      ReadWrite blockstore with resumption enabled use the same WithCarV1Padding option, since
-//      this option is used to locate the offset at which the data payload starts.
+//   2. contain a complete CAR v1 data header with root CIDs matching the CIDs passed to the
+//      constructor, starting at offset specified by WithCarV1Padding, followed by zero or more
+//      complete data frames. If any corrupt data frames are present the resumption will fail. Note,
+//      it is important that new instantiations of ReadWrite blockstore with resumption enabled use
+//      the same WithCarV1Padding option, since this option is used to locate the offset at which
+//      the data payload starts.
 //   3. have not been produced by a ReadWrite blockstore that was finalized, i.e. call to
 //      ReadWrite.Finalize returned successfully.
 func WithResumption(enabled bool) Option {
