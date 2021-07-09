@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 
 	"github.com/ipld/go-car/v2/internal/carv1/util"
 
@@ -211,7 +210,38 @@ func loadCarSlow(s Store, cr *CarReader) (*CarHeader, error) {
 	}
 }
 
+// Equals checks whether two headers are equal.
+// Two headers are considered equal if:
+//   1. They have the same version number, and
+//   2. They contain the same root CIDs in any order.
 func (h CarHeader) Equals(other CarHeader) bool {
-	// TODO should headers with same roots in different order be equal?
-	return reflect.DeepEqual(h, other)
+	if h.Version != other.Version {
+		return false
+	}
+	thisLen := len(h.Roots)
+	if thisLen != len(other.Roots) {
+		return false
+	}
+	// Headers with a single root are popular.
+	// Implement a fast execution path for popular cases.
+	if thisLen == 1 {
+		return h.Roots[0].Equals(other.Roots[0])
+	}
+
+	// Check other contains all roots.
+	for _, r := range h.Roots {
+		if !other.containsRoot(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func (h *CarHeader) containsRoot(root cid.Cid) bool {
+	for _, r := range h.Roots {
+		if r.Equals(root) {
+			return true
+		}
+	}
+	return false
 }
