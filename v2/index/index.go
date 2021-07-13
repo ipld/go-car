@@ -43,8 +43,8 @@ type (
 	}
 )
 
-// NewFromCodec constructs a new index corresponding to the given codec.
-func NewFromCodec(codec multicodec.Code) (Index, error) {
+// New constructs a new index corresponding to the given CAR index codec.
+func New(codec multicodec.Code) (Index, error) {
 	switch codec {
 	case multicodec.CarIndexSorted:
 		return newSorted(), nil
@@ -96,7 +96,7 @@ func ReadFrom(r io.Reader) (Index, error) {
 		return nil, err
 	}
 	codec := multicodec.Code(code)
-	idx, err := NewFromCodec(codec)
+	idx, err := New(codec)
 	if err != nil {
 		return nil, err
 	}

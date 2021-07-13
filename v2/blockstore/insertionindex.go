@@ -18,7 +18,7 @@ import (
 
 var (
 	errUnsupported      = errors.New("not supported")
-	insertionIndexCodec = 0x300003
+	insertionIndexCodec = multicodec.Code(0x300003)
 )
 
 type (
@@ -112,7 +112,7 @@ func (ii *insertionIndex) Unmarshal(r io.Reader) error {
 }
 
 func (ii *insertionIndex) Codec() multicodec.Code {
-	return multicodec.Code(insertionIndexCodec)
+	return insertionIndexCodec
 }
 
 func (ii *insertionIndex) Load(rs []index.Record) error {
@@ -132,7 +132,7 @@ func newInsertionIndex() *insertionIndex {
 
 // flatten returns a 'indexsorted' formatted index for more efficient subsequent loading
 func (ii *insertionIndex) flatten() (index.Index, error) {
-	si, err := index.NewFromCodec(multicodec.CarIndexSorted)
+	si, err := index.New(multicodec.CarIndexSorted)
 	if err != nil {
 		return nil, err
 	}
