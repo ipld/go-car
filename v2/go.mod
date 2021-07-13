@@ -10,6 +10,7 @@ require (
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipfs/go-merkledag v0.3.2
 	github.com/mattn/go-colorable v0.1.8 // indirect
+	github.com/multiformats/go-multicodec v0.2.1-0.20210713081508-b421db6850ae
 	github.com/multiformats/go-multihash v0.0.15
 	github.com/multiformats/go-varint v0.0.6
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
