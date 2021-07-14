@@ -41,7 +41,6 @@ type ReadWrite struct {
 	header carv2.Header
 
 	dedupCids bool
-	finalized bool
 }
 
 // TODO consider exposing interfaces
@@ -209,6 +208,11 @@ func (b *ReadWrite) resumeWithRoots(roots []cid.Cid) error {
 			// can't resume.
 			return errors.New("corrupt CARv2 header; cannot resume from file")
 		}
+		// Now that CARv2 header is present on file, clear it to avoid incorrect size and offset in
+		// header in case blocksotre is closed without finalization and is resumed from.
+		if err := b.unfinalize(); err != nil {
+			return err
+		}
 	}
 
 	// Use the given CAR v1 padding to instantiate the CAR v1 reader on file.
@@ -274,8 +278,13 @@ func (b *ReadWrite) resumeWithRoots(roots []cid.Cid) error {
 	return err
 }
 
+func (b *ReadWrite) unfinalize() error {
+	_, err := new(carv2.Header).WriteTo(internalio.NewOffsetWriter(b.f, carv2.PragmaSize))
+	return err
+}
+
 func (b *ReadWrite) panicIfFinalized() {
-	if b.finalized {
+	if b.header.CarV1Size != 0 {
 		panic("must not use a read-write blockstore after finalizing")
 	}
 }
@@ -306,16 +315,14 @@ func (b *ReadWrite) PutMany(blks []blocks.Block) error {
 		}
 		b.idx.insertNoReplace(c, n)
 	}
-	b.header = b.header.WithCarV1Size(uint64(b.carV1Writer.Position()))
-	_, err := b.header.WriteTo(internalio.NewOffsetWriter(b.f, carv2.PragmaSize))
-	return err
+	return nil
 }
 
 // Finalize finalizes this blockstore by writing the CAR v2 header, along with flattened index
 // for more efficient subsequent read.
 // After this call, this blockstore can no longer be used for read or write.
 func (b *ReadWrite) Finalize() error {
-	if b.finalized {
+	if b.header.CarV1Size != 0 {
 		// Allow duplicate Finalize calls, just like Close.
 		// Still error, just like ReadOnly.Close; it should be discarded.
 		return fmt.Errorf("called Finalize twice")
@@ -323,7 +330,6 @@ func (b *ReadWrite) Finalize() error {
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.finalized = true
 	// TODO check if add index option is set and don't write the index then set index offset to zero.
 	// TODO see if folks need to continue reading from a finalized blockstore, if so return ReadOnly blockstore here.
 	b.header = b.header.WithCarV1Size(uint64(b.carV1Writer.Position()))
