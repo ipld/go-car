@@ -26,6 +26,8 @@ import (
 	"github.com/ipld/go-car/v2/internal/carv1"
 )
 
+var rng = rand.New(rand.NewSource(1413))
+
 func TestBlockstore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -54,7 +56,7 @@ func TestBlockstore(t *testing.T) {
 		cids = append(cids, b.Cid())
 
 		// try reading a random one:
-		candidate := cids[rand.Intn(len(cids))]
+		candidate := cids[rng.Intn(len(cids))]
 		if has, err := ingester.Has(candidate); !has || err != nil {
 			t.Fatalf("expected to find %s but didn't: %s", candidate, err)
 		}
@@ -305,11 +307,11 @@ func TestBlockstoreResumption(t *testing.T) {
 		// 30% chance of subject failing; more concretely: re-instantiating blockstore with the same
 		// file without calling Finalize. The higher this percentage the slower the test runs
 		// considering the number of blocks in the original CAR v1 test payload.
-		resume := rand.Float32() <= 0.3
+		resume := rng.Float32() <= 0.3
 		// If testing resume case, then flip a coin to decide whether to finalize before blockstore
 		// re-instantiation or not. Note, both cases should work for resumption since we do not
 		// limit resumption to unfinalized files.
-		finalizeBeforeResumption := rand.Float32() <= 0.5
+		finalizeBeforeResumption := rng.Float32() <= 0.5
 		if resume {
 			if finalizeBeforeResumption {
 				require.NoError(t, subject.Finalize())
@@ -326,7 +328,7 @@ func TestBlockstoreResumption(t *testing.T) {
 
 		// With 10% chance test read operations on an resumed read-write blockstore.
 		// We don't test on every put to reduce test runtime.
-		testRead := rand.Float32() <= 0.1
+		testRead := rng.Float32() <= 0.1
 		if testRead {
 			// Assert read operations on the read-write blockstore are as expected when resumed from an
 			// existing file
