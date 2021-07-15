@@ -59,13 +59,15 @@ func WithIndexPadding(p uint64) Option {
 	}
 }
 
-// WithCidDeduplication makes Put calls ignore blocks if the blockstore already
+// WithDisableCidDeduplication allows Put calls to write blocks even though blockstore already
 // has the exact same CID.
-// This can help avoid redundancy in a CARv1's list of CID-Block pairs.
+//
+// Note, deduplication by CID is enabled by default, which can help avoid redundancy in a CARv1's list
+// of CID-Block pairs.
 //
 // Note that this compares whole CIDs, not just multihashes.
-func WithCidDeduplication(b *ReadWrite) { // TODO should this take a bool and return an option to allow disabling dedupliation?
-	b.dedupCids = true
+func WithDisableCidDeduplication(b *ReadWrite) {
+	b.dedupCids = false
 }
 
 // NewReadWrite creates a new ReadWrite at the given path with a provided set of root CIDs and options.
@@ -103,7 +105,6 @@ func WithCidDeduplication(b *ReadWrite) { // TODO should this take a bool and re
 // Resuming from finalized files is allowed. However, resumption will regenerate the index
 // regardless by scanning every existing block in file.
 func NewReadWrite(path string, roots []cid.Cid, opts ...Option) (*ReadWrite, error) {
-	// TODO: enable deduplication by default now that resumption is automatically attempted.
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o666) // TODO: Should the user be able to configure FileMode permissions?
 	if err != nil {
 		return nil, fmt.Errorf("could not open read/write file: %w", err)
@@ -125,9 +126,10 @@ func NewReadWrite(path string, roots []cid.Cid, opts ...Option) (*ReadWrite, err
 	// Instantiate block store.
 	// Set the header fileld before applying options since padding options may modify header.
 	rwbs := &ReadWrite{
-		f:      f,
-		idx:    newInsertionIndex(),
-		header: carv2.NewHeader(0),
+		f:         f,
+		idx:       newInsertionIndex(),
+		header:    carv2.NewHeader(0),
+		dedupCids: true, // Deduplication by CID is enabled by default.
 	}
 	for _, opt := range opts {
 		opt(rwbs)

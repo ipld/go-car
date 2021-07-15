@@ -104,13 +104,13 @@ func TestBlockstorePutSameHashes(t *testing.T) {
 	tdir := t.TempDir()
 	wbs, err := blockstore.NewReadWrite(
 		filepath.Join(tdir, "readwrite.car"), nil,
+		blockstore.WithDisableCidDeduplication,
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { wbs.Finalize() })
 
 	wbsd, err := blockstore.NewReadWrite(
 		filepath.Join(tdir, "readwrite-dedup.car"), nil,
-		blockstore.WithCidDeduplication,
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { wbsd.Finalize() })
