@@ -9,6 +9,7 @@ require (
 	github.com/ipfs/go-ipld-cbor v0.0.5
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipfs/go-merkledag v0.3.2
+	github.com/klauspost/cpuid/v2 v2.0.8 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/multiformats/go-multicodec v0.2.1-0.20210713081508-b421db6850ae
 	github.com/multiformats/go-multihash v0.0.15
@@ -16,6 +17,7 @@ require (
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/stretchr/testify v1.7.0
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
+	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
 	golang.org/x/exp v0.0.0-20210615023648-acb5c1269671
-	golang.org/x/sys v0.0.0-20210403161142-5e06dd20ab57 // indirect
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 )
