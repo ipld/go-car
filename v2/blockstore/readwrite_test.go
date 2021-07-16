@@ -1,6 +1,7 @@
 package blockstore_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-merkledag"
 
 	carv2 "github.com/ipld/go-car/v2"
@@ -558,4 +560,19 @@ func TestReadWriteResumptionFromFileWithDifferentCarV1PaddingIsError(t *testing.
 		"`WithCarV1Padding` option must match the padding on file. "+
 		"Expected padding value of 1413 but got 1314")
 	require.Nil(t, resumingSubject)
+}
+
+func TestCidReaderPanic(t *testing.T) {
+	var cidBuilder = cid.V1Builder{Codec: cid.Raw, MhType: multihash.IDENTITY}
+
+	K := datastore.RawKey("/filestore/UDSAEIBQVKERMTGVGODJJDSMNX2O2RL2L7DTDPMIU5WZDV6YYES42AQM6M")
+
+	c, err := cidBuilder.Sum(K.Bytes())
+	require.NoError(t, err)
+	fmt.Println(c.String())
+
+	b := c.Bytes()
+
+	// this panics
+	cid.CidFromReader(bytes.NewReader(b))
 }
