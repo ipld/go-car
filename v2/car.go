@@ -33,7 +33,7 @@ type (
 		DataOffset uint64
 		// The byte-length of the CARv1 data payload.
 		DataSize uint64
-		// Te byte-offset from the beginning of the CARv2 to the first byte of the index payload. This value may be 0 to indicate the absence of index data.
+		// The byte-offset from the beginning of the CARv2 to the first byte of the index payload. This value may be 0 to indicate the absence of index data.
 		IndexOffset uint64
 	}
 	// Characteristics is a bitfield placeholder for capturing the characteristics of a CARv2 such as order and determinism.
