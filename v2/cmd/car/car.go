@@ -25,7 +25,7 @@ func main() {
 				Name:    "codec",
 				Aliases: []string{"c"},
 				Usage:   "The type of index to write",
-				Value:   "car-multihash-index-sorted",
+				Value:   multicodec.CarMultihashIndexSorted.String(),
 			},
 		},
 		Commands: []*cli.Command{
