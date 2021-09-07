@@ -18,8 +18,8 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:  "carve",
-		Usage: "A utility for slicing CARs",
+		Name:  "car",
+		Usage: "Utility for working with car files",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "codec",
@@ -42,8 +42,8 @@ func main() {
 
 					var idx index.Index
 					if c.String("codec") != "none" {
-						mc, ok := multicodec.Of(c.String("codec"))
-						if !ok {
+						var mc multicodec.Code
+						if err := mc.Set(c.String("codec")); err != nil {
 							return fmt.Errorf("unknown codec: %s", c.String("codec"))
 						}
 						idx, err = index.New(mc)
@@ -62,15 +62,8 @@ func main() {
 					defer outStream.Close()
 
 					v1r := r.DataReader()
-					v1Size, err := v1r.Seek(0, io.SeekEnd)
-					if err != nil {
-						return err
-					}
-					if _, err := v1r.Seek(0, io.SeekStart); err != nil {
-						return err
-					}
 
-					v2Header := carv2.NewHeader(uint64(v1Size))
+					v2Header := carv2.NewHeader(r.Header.DataSize)
 					if c.String("codec") == "none" {
 						v2Header.IndexOffset = 0
 						if _, err := outStream.Write(carv2.Pragma); err != nil {
@@ -122,6 +115,7 @@ func main() {
 						}
 
 						// Null padding; by default it's an error.
+						// TODO: integrate corresponding ReadOption
 						if sectionLen == 0 {
 							// TODO: pad writer to expected length.
 							break
@@ -146,14 +140,11 @@ func main() {
 						sectionOffset += int64(sectionLen) + int64(varint.UvarintSize(sectionLen))
 					}
 
-					if c.String("codec") != "none" {
-						if err := idx.Load(records); err != nil {
-							return err
-						}
-						return idx.Marshal(outStream)
+					if err := idx.Load(records); err != nil {
+						return err
 					}
-					return nil
 
+					return index.WriteTo(idx, outStream)
 				},
 			},
 		},
