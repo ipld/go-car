@@ -25,7 +25,7 @@ func main() {
 				Name:    "codec",
 				Aliases: []string{"c"},
 				Usage:   "The type of index to write",
-				Value:   "CarMultihashIndexSorted",
+				Value:   "car-multihash-index-sorted",
 			},
 		},
 		Commands: []*cli.Command{
@@ -44,7 +44,7 @@ func main() {
 					if c.String("codec") != "none" {
 						var mc multicodec.Code
 						if err := mc.Set(c.String("codec")); err != nil {
-							return fmt.Errorf("unknown codec: %s", c.String("codec"))
+							return err
 						}
 						idx, err = index.New(mc)
 						if err != nil {
