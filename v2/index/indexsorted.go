@@ -13,6 +13,8 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
+var _ Index = (*multiWidthIndex)(nil)
+
 type (
 	digestRecord struct {
 		digest []byte
@@ -85,15 +87,21 @@ func (s *singleWidthIndex) getAll(d []byte, fn func(uint64) bool) error {
 	idx := sort.Search(int(s.len), func(i int) bool {
 		return s.Less(i, d)
 	})
-	if uint64(idx) == s.len {
-		return ErrNotFound
-	}
 
-	any := false
-	for bytes.Equal(d[:], s.index[idx*int(s.width):(idx+1)*int(s.width)-8]) {
-		any = true
-		offset := binary.LittleEndian.Uint64(s.index[(idx+1)*int(s.width)-8 : (idx+1)*int(s.width)])
-		if !fn(offset) {
+	var any bool
+	for ; uint64(idx) < s.len; idx++ {
+		digestStart := idx * int(s.width)
+		offsetEnd := (idx + 1) * int(s.width)
+		digestEnd := offsetEnd - 8
+		if bytes.Equal(d[:], s.index[digestStart:digestEnd]) {
+			any = true
+			offset := binary.LittleEndian.Uint64(s.index[digestEnd:offsetEnd])
+			if !fn(offset) {
+				// User signalled to stop searching; therefore, break.
+				break
+			}
+		} else {
+			// No more matches; therefore, break.
 			break
 		}
 	}
@@ -116,6 +124,21 @@ func (s *singleWidthIndex) Load(items []Record) error {
 		s.len = i.len
 		s.width = i.width
 		return nil
+	}
+	return nil
+}
+
+func (s *singleWidthIndex) forEachDigest(f func(digest []byte, offset uint64) error) error {
+	segmentCount := len(s.index) / int(s.width)
+	for i := 0; i < segmentCount; i++ {
+		digestStart := i * int(s.width)
+		offsetEnd := (i + 1) * int(s.width)
+		digestEnd := offsetEnd - 8
+		digest := s.index[digestStart:digestEnd]
+		offset := binary.LittleEndian.Uint64(s.index[digestEnd:offsetEnd])
+		if err := f(digest, offset); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -183,6 +206,13 @@ func (m *multiWidthIndex) Load(items []Record) error {
 		if err != nil {
 			return err
 		}
+
+		// Ignore records with IDENTITY as required by CARv2 spec.
+		// See: https://ipld.io/specs/transport/car/carv2/#index-format
+		if decHash.Code == multihash.IDENTITY {
+			continue
+		}
+
 		digest := decHash.Digest
 		idx, ok := idxs[len(digest)]
 		if !ok {
@@ -206,6 +236,15 @@ func (m *multiWidthIndex) Load(items []Record) error {
 			index: compact,
 		}
 		(*m)[uint32(width)+8] = s
+	}
+	return nil
+}
+
+func (m *multiWidthIndex) forEachDigest(f func(digest []byte, offset uint64) error) error {
+	for _, swi := range *m {
+		if err := swi.forEachDigest(f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
