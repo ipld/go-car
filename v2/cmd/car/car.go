@@ -8,9 +8,9 @@ import (
 	"os"
 
 	"github.com/ipfs/go-cid"
-	carv1 "github.com/ipld/go-car"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
+	icarv1 "github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-varint"
 	"github.com/urfave/cli/v2"
@@ -86,11 +86,11 @@ func main() {
 					}
 
 					// collect records as we go through the v1r
-					rdr, err := carv1.NewCarReader(v1r)
+					hdr, err := icarv1.ReadHeader(v1r)
 					if err != nil {
 						return fmt.Errorf("error reading car header: %w", err)
 					}
-					if err := carv1.WriteHeader(rdr.Header, outStream); err != nil {
+					if err := icarv1.WriteHeader(hdr, outStream); err != nil {
 						return err
 					}
 
