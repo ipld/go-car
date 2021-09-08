@@ -18,7 +18,7 @@ func SplitCar(c *cli.Context) error {
 	defer r.Close()
 
 	if !r.Header.HasIndex() {
-		return fmt.Errorf("No index present")
+		return fmt.Errorf("no index present")
 	}
 	_, err = io.Copy(os.Stdout, r.IndexReader())
 	return err
