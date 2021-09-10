@@ -45,7 +45,7 @@ func main() {
 				Action:  FilterCar,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:      "cidFile",
+						Name:      "cid-file",
 						Usage:     "A file to read CIDs from",
 						TakesFile: true,
 					},
