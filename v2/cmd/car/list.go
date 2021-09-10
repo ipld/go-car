@@ -6,17 +6,24 @@ import (
 	"os"
 
 	carv2 "github.com/ipld/go-car/v2"
-	icarv1 "github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/urfave/cli/v2"
 )
 
 // ListCar is a command to output the cids in a car.
 func ListCar(c *cli.Context) error {
-	r, err := carv2.OpenReader(c.Args().Get(0))
+	inStream := os.Stdin
+	var err error
+	if c.Args().Len() >= 1 {
+		inStream, err = os.Open(c.Args().First())
+		if err != nil {
+			return err
+		}
+		defer inStream.Close()
+	}
+	rd, err := carv2.NewBlockReader(inStream)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 
 	outStream := os.Stdout
 	if c.Args().Len() >= 2 {
@@ -27,7 +34,6 @@ func ListCar(c *cli.Context) error {
 	}
 	defer outStream.Close()
 
-	rd, err := icarv1.NewCarReader(r.DataReader())
 	if err != nil {
 		return err
 	}
@@ -40,7 +46,7 @@ func ListCar(c *cli.Context) error {
 			}
 			return err
 		}
-		outStream.WriteString(fmt.Sprintf("%s\n", blk.Cid()))
+		fmt.Fprintf(outStream, "%s\n", blk.Cid())
 	}
 
 	return err

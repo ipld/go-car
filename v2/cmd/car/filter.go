@@ -43,16 +43,11 @@ func FilterCar(c *cli.Context) error {
 		}
 		defer inStream.Close()
 	}
-	cidList, err := parseCIDS(inStream)
+	cidMap, err := parseCIDS(inStream)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("filtering to %d cids\n", len(cidList))
-
-	cidMap := make(map[cid.Cid]struct{})
-	for _, e := range cidList {
-		cidMap[e] = struct{}{}
-	}
+	fmt.Printf("filtering to %d cids\n", len(cidMap))
 
 	rd, err := icarv1.NewCarReader(r.DataReader())
 	if err != nil {
@@ -76,14 +71,14 @@ func FilterCar(c *cli.Context) error {
 	return bs.Finalize()
 }
 
-func parseCIDS(r io.Reader) ([]cid.Cid, error) {
-	cb := make([]cid.Cid, 0)
+func parseCIDS(r io.Reader) (map[cid.Cid]struct{}, error) {
+	cids := make(map[cid.Cid]struct{})
 	br := bufio.NewReader(r)
 	for {
 		line, _, err := br.ReadLine()
 		if err != nil {
 			if err == io.EOF {
-				return cb, nil
+				return cids, nil
 			}
 			return nil, err
 		}
@@ -95,6 +90,9 @@ func parseCIDS(r io.Reader) ([]cid.Cid, error) {
 		if err != nil {
 			return nil, err
 		}
-		cb = append(cb, c)
+		if _, ok := cids[c]; ok {
+			fmt.Fprintf(os.Stderr, "duplicate cid: %s\n", c)
+		}
+		cids[c] = struct{}{}
 	}
 }
