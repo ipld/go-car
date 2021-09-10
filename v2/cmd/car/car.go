@@ -28,10 +28,9 @@ func main() {
 				},
 			},
 			{
-				Name:    "split",
-				Aliases: []string{"s"},
-				Usage:   "Split an index to a detached file",
-				Action:  SplitCar,
+				Name:   "detach-index",
+				Usage:  "Detach an index to a detached file",
+				Action: DetachCar,
 			},
 		},
 	}
