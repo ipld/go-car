@@ -64,6 +64,8 @@ type (
 	// provide an iterator for getting the list of all entries in the
 	// index.
 	IterableIndex interface {
+		Index
+
 		// ForEach takes a callback function that will be called
 		// on each entry in the index. The arguments to the callback are
 		// the multihash of the element, and the offset in the car file
