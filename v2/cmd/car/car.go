@@ -32,6 +32,25 @@ func main() {
 				Usage:  "Detach an index to a detached file",
 				Action: DetachCar,
 			},
+			{
+				Name:    "list",
+				Aliases: []string{"l"},
+				Usage:   "List the CIDs in a car",
+				Action:  ListCar,
+			},
+			{
+				Name:    "filter",
+				Aliases: []string{"f"},
+				Usage:   "Filter the CIDs in a car",
+				Action:  FilterCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "cidFile",
+						Usage:     "A file to read CIDs from",
+						TakesFile: true,
+					},
+				},
+			},
 		},
 	}
 
