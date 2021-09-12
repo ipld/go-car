@@ -18,7 +18,6 @@ require (
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/polydawn/refmt v0.0.0-20201211092308-30ac6d18308e // indirect
 	github.com/stretchr/testify v1.7.0
-	github.com/urfave/cli/v2 v2.3.0
 	github.com/warpfork/go-wish v0.0.0-20200122115046-b9ea61034e4a // indirect
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
