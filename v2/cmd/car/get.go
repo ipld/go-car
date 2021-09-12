@@ -20,7 +20,7 @@ func GetCarBlock(c *cli.Context) error {
 		return err
 	}
 
-	// string to car
+	// string to CID
 	blkCid, err := cid.Parse(c.Args().Get(1))
 	if err != nil {
 		return err
