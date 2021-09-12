@@ -40,6 +40,6 @@ func GetCarBlock(c *cli.Context) error {
 		defer outStream.Close()
 	}
 
-	_, err := outStream.Write(blk.RawData())
+	_, err = outStream.Write(blk.RawData())
 	return err
 }
