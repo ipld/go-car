@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/ipfs/go-cid"
+	carv1 "github.com/ipld/go-car"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
-	carv1 "github.com/ipld/go-car"
 	"github.com/urfave/cli/v2"
 )
 
