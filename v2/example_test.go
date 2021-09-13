@@ -168,6 +168,26 @@ func TestFail(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, cid.Undef, root)
 
+	f, err := os.Open(dst)
+	require.NoError(t, err)
+
+	reader, err := carv2.NewBlockReader(f)
+	require.NoError(t, err)
+	var i int
+	for {
+		next, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		t.Logf("\t%v\n", next.Cid())
+		i++
+	}
+	t.Logf("CID count:   %d\n", i)
+	t.Logf("CAR version: %d\n", reader.Version)
+	t.Logf("CID roots:   %v\n", reader.Roots)
+
 	// convert the CARv2 to a normal file again and ensure the contents match
 	fs, err := stores.ReadOnlyFilestore(dst)
 	require.NoError(t, err)
