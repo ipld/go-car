@@ -72,9 +72,7 @@ func VerifyCar(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := rootMap[blk.Cid()]; ok {
-			delete(rootMap, blk.Cid())
-		}
+		delete(rootMap, blk.Cid())
 		cidList = append(cidList, blk.Cid())
 	}
 
