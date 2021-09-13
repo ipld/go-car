@@ -6,6 +6,13 @@ import (
 	"io"
 	"os"
 
+	_ "github.com/ipld/go-codec-dagpb"
+	_ "github.com/ipld/go-ipld-prime/codec/cbor"
+	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
+	_ "github.com/ipld/go-ipld-prime/codec/dagjson"
+	_ "github.com/ipld/go-ipld-prime/codec/json"
+	_ "github.com/ipld/go-ipld-prime/codec/raw"
+
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	ipfsbs "github.com/ipfs/go-ipfs-blockstore"
@@ -83,7 +90,7 @@ func GetCarDag(c *cli.Context) error {
 			blk, err := bs.Get(cl.Cid)
 			if err != nil {
 				if err == ipfsbs.ErrNotFound {
-					if c.IsSet("strict") && c.Bool("strict") {
+					if c.Bool("strict") {
 						return nil, err
 					}
 					return nil, traversal.SkipMe{}
