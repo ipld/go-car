@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/urfave/cli/v2"
@@ -39,10 +38,6 @@ func ListCar(c *cli.Context) error {
 		return err
 	}
 
-	linebreak := "\n"
-	if runtime.GOOS == "windows" {
-		linebreak = "\r\n"
-	}
 	for {
 		blk, err := rd.Next()
 		if err != nil {
@@ -51,7 +46,7 @@ func ListCar(c *cli.Context) error {
 			}
 			return err
 		}
-		fmt.Fprintf(outStream, "%s%s", blk.Cid(), linebreak)
+		fmt.Fprintf(outStream, "%s\n", blk.Cid())
 	}
 
 	return err
