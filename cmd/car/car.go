@@ -16,6 +16,20 @@ func main1() int {
 		Usage: "Utility for working with car files",
 		Commands: []*cli.Command{
 			{
+				Name:    "create",
+				Usage:   "Create a car file",
+				Aliases: []string{"c"},
+				Action:  CreateCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "file",
+						Aliases:   []string{"f"},
+						Usage:     "The car file to write to",
+						TakesFile: true,
+					},
+				},
+			},
+			{
 				Name:   "detach-index",
 				Usage:  "Detach an index to a detached file",
 				Action: DetachCar,
@@ -79,6 +93,13 @@ func main1() int {
 				Aliases: []string{"l"},
 				Usage:   "List the CIDs in a car",
 				Action:  ListCar,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Usage:   "Include verbose information about contained blocks",
+					},
+				},
 			},
 			{
 				Name:    "verify",
