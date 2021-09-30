@@ -1,0 +1,9 @@
+car create --file=out.car foo.txt bar.txt
+
+! car verify out.car
+stderr 'header lists root\(s\) not present as a block'
+
+-- foo.txt --
+foo content
+-- bar.txt --
+bar content

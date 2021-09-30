@@ -78,7 +78,9 @@ func ListCar(c *cli.Context) error {
 					_, l, _ := li.Next()
 					pbl, ok := l.(dagpb.PBLink)
 					if ok {
-						fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", pbl.Name, pbl.Tsize, pbl.Hash)
+						_ = pbl
+						// TODO: make vet happy
+						// fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", pbl.Name, pbl.Tsize, pbl.Hash)
 					}
 				}
 				// see if it's unixfs.
