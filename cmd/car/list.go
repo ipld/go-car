@@ -6,10 +6,11 @@ import (
 	"io"
 	"os"
 
+	"github.com/dustin/go-humanize"
 	data "github.com/ipfs/go-unixfsnode/data"
 	carv2 "github.com/ipld/go-car/v2"
 	dagpb "github.com/ipld/go-codec-dagpb"
-	"github.com/ipld/go-ipld-prime/codec/json"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/multiformats/go-multicodec"
 	"github.com/urfave/cli/v2"
 )
@@ -74,12 +75,30 @@ func ListCar(c *cli.Context) error {
 				fmt.Fprintf(outStream, "\t%d links. %d bytes\n", pbn.Links.Length(), dl)
 				// example link:
 				li := pbn.Links.ListIterator()
+				max := 3
 				for !li.Done() {
 					_, l, _ := li.Next()
+					max--
 					pbl, ok := l.(dagpb.PBLink)
-					if ok {
-						fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", pbl.Name, pbl.Tsize, pbl.Hash)
+					if ok && max >= 0 {
+						hsh := "<unknown>"
+						lnk, ok := pbl.Hash.Link().(cidlink.Link)
+						if ok {
+							hsh = lnk.Cid.String()
+						}
+						name := "<no name>"
+						if pbl.Name.Exists() {
+							name = pbl.Name.Must().String()
+						}
+						size := 0
+						if pbl.Tsize.Exists() {
+							size = int(pbl.Tsize.Must().Int())
+						}
+						fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", name, humanize.Bytes(uint64(size)), hsh)
 					}
+				}
+				if max < 0 {
+					fmt.Fprintf(outStream, "\t\t(%d total)\n", 3-max)
 				}
 				// see if it's unixfs.
 				ufd, err := data.DecodeUnixFSData(pbn.Data.Must().Bytes())
@@ -88,7 +107,6 @@ func ListCar(c *cli.Context) error {
 					continue
 				}
 				fmt.Fprintf(outStream, "\tUnixfs %s\n", data.DataTypeNames[ufd.FieldDataType().Int()])
-				json.Encode(ufd, outStream)
 			}
 		} else {
 			fmt.Fprintf(outStream, "%s\n", blk.Cid())

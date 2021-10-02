@@ -3,6 +3,7 @@ module github.com/ipld/go-car/cmd
 go 1.16
 
 require (
+	github.com/dustin/go-humanize v1.0.0
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.1.0
 	github.com/ipfs/go-ipfs-blockstore v1.0.3
