@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-unixfsnode/data/builder"
+	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 	dagpb "github.com/ipld/go-codec-dagpb"
 	"github.com/ipld/go-ipld-prime"
@@ -59,12 +59,7 @@ func CreateCar(c *cli.Context) error {
 	}
 	fmt.Printf("reopening for final root %d vs %d\n", len(proxyRoot.Bytes()), len(root.Bytes()))
 	// re-open/finalize with the final root.
-	return nil
-	cdest, err = blockstore.OpenReadWrite(c.String("file"), []cid.Cid{root})
-	if err != nil {
-		return err
-	}
-	return cdest.Finalize()
+	return car.ReplaceRootsInFile(c.String("file"), []cid.Cid{root})
 }
 
 func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) (cid.Cid, error) {
@@ -98,7 +93,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 
 	topLevel := make([]dagpb.PBLink, 0, len(paths))
 	for _, p := range paths {
-		l, size, err := writeFile(p, &ls)
+		l, size, err := builder.BuildUnixFSRecursive(p, &ls)
 		if err != nil {
 			return cid.Undef, err
 		}
@@ -123,20 +118,3 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 
 	return rcl.Cid, nil
 }
-
-func writeFile(path string, ls *ipld.LinkSystem) (ipld.Link, uint64, error) {
-	fh, err := os.Open(path)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer fh.Close()
-
-	return builder.BuildUnixFSFile(fh, "", ls)
-}
-
-/*
-func writeDirectory(path string, ls *ipld.LinkSystem) (ipld.Link, error) {
-	// TODO: collect entries
-	return writeDirectoryWithEntries(entries, ls)
-}
-*/

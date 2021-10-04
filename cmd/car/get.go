@@ -124,7 +124,7 @@ func GetCarDag(c *cli.Context) error {
 	}
 
 	// selector traversal
-	s := selectorParser.CommonSelector_MatchAllRecursively
+	s, _ := selector.CompileSelector(selectorParser.CommonSelector_MatchAllRecursively)
 	if c.IsSet("selector") {
 		sn, err := selectorParser.ParseJSONSelector(c.String("selector"))
 		if err != nil {
