@@ -121,9 +121,11 @@ func (cw *carWriter) writeNode(ctx context.Context, nd format.Node) error {
 type CarReader struct {
 	br     *bufio.Reader
 	Header *CarHeader
+
+	opts options
 }
 
-func NewCarReader(r io.Reader) (*CarReader, error) {
+func NewCarReader(r io.Reader, opts ...Option) (*CarReader, error) {
 	br := bufio.NewReader(r)
 	ch, err := ReadHeader(br)
 	if err != nil {
@@ -141,12 +143,17 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 	return &CarReader{
 		br:     br,
 		Header: ch,
+
+		opts: applyOptions(opts...),
 	}, nil
 }
 
 func (cr *CarReader) Next() (blocks.Block, error) {
 	c, data, err := util.ReadNode(cr.br)
 	if err != nil {
+		if cr.opts.ZeroLengthSectionAsEOF && err == util.ErrZeroLengthSection {
+			return nil, io.EOF
+		}
 		return nil, err
 	}
 
@@ -166,8 +173,8 @@ type batchStore interface {
 	PutMany([]blocks.Block) error
 }
 
-func LoadCar(s Store, r io.Reader) (*CarHeader, error) {
-	cr, err := NewCarReader(r)
+func LoadCar(s Store, r io.Reader, opts ...Option) (*CarHeader, error) {
+	cr, err := NewCarReader(r, opts...)
 	if err != nil {
 		return nil, err
 	}

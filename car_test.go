@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -63,6 +64,57 @@ func TestRoundtrip(t *testing.T) {
 
 	bs := bserv.Blockstore()
 	for _, nd := range []format.Node{a, b, c, nd1, nd2, nd3} {
+		has, err := bs.Has(nd.Cid())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !has {
+			t.Fatal("should have cid in blockstore")
+		}
+	}
+}
+
+func TestRoundtripNullPadded(t *testing.T) {
+	dserv := dstest.Mock()
+	a := merkledag.NewRawNode([]byte("aaaa"))
+
+	assertAddNodes(t, dserv, a)
+
+	buf := new(bytes.Buffer)
+	if err := car.WriteCar(context.Background(), dserv, []cid.Cid{a.Cid()}, buf); err != nil {
+		t.Fatal(err)
+	}
+
+	buf.Write([]byte{0, 0, 0, 0, 0})
+
+	bserv := dstest.Bserv()
+
+	// Ensure that not using the option results in an error.
+	// Don't consume the buffer, either.
+	{
+		_, err := car.LoadCar(bserv.Blockstore(), bytes.NewReader(buf.Bytes()))
+		if got, want := fmt.Sprint(err), "zero-length section"; !strings.Contains(got, want) {
+			t.Fatalf("expected error to contain %q, got: %v", want, got)
+		}
+	}
+
+	// Using the option should work.
+	ch, err := car.LoadCar(bserv.Blockstore(), buf, car.ZeroLengthSectionAsEOF(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ch.Roots) != 1 {
+		t.Fatal("should have one root")
+	}
+
+	if !ch.Roots[0].Equals(a.Cid()) {
+		t.Fatal("got wrong cid")
+	}
+
+	bs := bserv.Blockstore()
+	for _, nd := range []format.Node{a} {
 		has, err := bs.Has(nd.Cid())
 		if err != nil {
 			t.Fatal(err)

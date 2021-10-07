@@ -5,8 +5,9 @@ import "math"
 // options holds the configured options after applying a number of
 // Option funcs.
 type options struct {
-	TraverseLinksOnlyOnce bool
-	MaxTraversalLinks     uint64
+	TraverseLinksOnlyOnce  bool
+	MaxTraversalLinks      uint64
+	ZeroLengthSectionAsEOF bool
 }
 
 // Option describes an option which affects behavior when
@@ -35,6 +36,16 @@ func TraverseLinksOnlyOnce() Option {
 func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 	return func(sco *options) {
 		sco.MaxTraversalLinks = MaxTraversalLinks
+	}
+}
+
+// ZeroLengthSectionAsEOF sets whether to allow the CARv1 decoder to treat
+// a zero-length section as the end of the input CAR file. For example, this can
+// be useful to allow "null padding" after a CARv1 without knowing where the
+// padding begins.
+func ZeroLengthSectionAsEOF(enable bool) Option {
+	return func(sco *options) {
+		sco.ZeroLengthSectionAsEOF = enable
 	}
 }
 

@@ -2,60 +2,35 @@ package util
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 
 	cid "github.com/ipfs/go-cid"
-	mh "github.com/multiformats/go-multihash"
 )
-
-var cidv0Pref = []byte{0x12, 0x20}
 
 type BytesReader interface {
 	io.Reader
 	io.ByteReader
 }
 
-// TODO: this belongs in the go-cid package
+// Deprecated: use go-cid.CidFromBytes.
 func ReadCid(buf []byte) (cid.Cid, int, error) {
-	if bytes.Equal(buf[:2], cidv0Pref) {
-		c, err := cid.Cast(buf[:34])
-		return c, 34, err
-	}
-
-	br := bytes.NewReader(buf)
-
-	// assume cidv1
-	vers, err := binary.ReadUvarint(br)
-	if err != nil {
-		return cid.Cid{}, 0, err
-	}
-
-	// TODO: the go-cid package allows version 0 here as well
-	if vers != 1 {
-		return cid.Cid{}, 0, fmt.Errorf("invalid cid version number")
-	}
-
-	codec, err := binary.ReadUvarint(br)
-	if err != nil {
-		return cid.Cid{}, 0, err
-	}
-
-	mhr := mh.NewReader(br)
-	h, err := mhr.ReadMultihash()
-	if err != nil {
-		return cid.Cid{}, 0, err
-	}
-
-	return cid.NewCidV1(codec, h), len(buf) - br.Len(), nil
+	n, c, err := cid.CidFromBytes(buf)
+	return c, n, err
 }
+
+var ErrZeroLengthSection = fmt.Errorf("zero-length section encountered")
 
 func ReadNode(br *bufio.Reader) (cid.Cid, []byte, error) {
 	data, err := LdRead(br)
 	if err != nil {
 		return cid.Cid{}, nil, err
+	}
+	// ReadCid used to panic or error on null padding.
+	// Instead, return a sentinel error to let the user decide what to do.
+	if len(data) == 0 {
+		return cid.Cid{}, nil, ErrZeroLengthSection
 	}
 
 	c, n, err := ReadCid(data)

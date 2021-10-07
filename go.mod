@@ -8,7 +8,6 @@ require (
 	github.com/ipfs/go-merkledag v0.3.2
 	github.com/ipld/go-codec-dagpb v1.2.0
 	github.com/ipld/go-ipld-prime v0.12.3-0.20210930132912-0b3aef3ca569
-	github.com/multiformats/go-multihash v0.0.15
 	github.com/stretchr/testify v1.7.0
 )
 
