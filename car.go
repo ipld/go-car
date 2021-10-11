@@ -65,6 +65,40 @@ func WriteCarWithWalker(ctx context.Context, ds format.NodeGetter, roots []cid.C
 	return nil
 }
 
+func WriteCarIter(ctx context.Context, ds format.NodeGetter, roots []cid.Cid, w io.Writer) (func() (error, bool), error) {
+	return WriteCarWithWalkerIter(ctx, ds, roots, w, DefaultWalkFunc)
+}
+
+func WriteCarWithWalkerIter(ctx context.Context, ds format.NodeGetter, roots []cid.Cid, w io.Writer, walk WalkFunc) (func() (error, bool), error) {
+	writeHeader := true
+	cw := &carWriter{ds: ds, w: w, walk: walk}
+	seen := cid.NewSet()
+	var i int
+	return func() (error, bool) {
+		if writeHeader {
+			h := &CarHeader{
+				Roots:   roots,
+				Version: 1,
+			}
+
+			if err := WriteHeader(h, w); err != nil {
+				return fmt.Errorf("failed to write car header: %s", err), false
+			}
+			writeHeader = false
+			return nil, true
+		}
+		if i >= len(roots) {
+			return nil, false
+		}
+		r := roots[i]
+		if err := merkledag.Walk(ctx, cw.enumGetLinks, r, seen.Visit); err != nil {
+			return err, false
+		}
+		i += 1
+		return nil, true
+	}, nil
+}
+
 func DefaultWalkFunc(nd format.Node) ([]*format.Link, error) {
 	return nd.Links(), nil
 }
