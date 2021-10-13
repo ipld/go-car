@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 
 	"github.com/dustin/go-humanize"
+	"github.com/ipfs/go-cid"
 	data "github.com/ipfs/go-unixfsnode/data"
+	"github.com/ipfs/go-unixfsnode/hamt"
 	carv2 "github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car/v2/blockstore"
 	dagpb "github.com/ipld/go-codec-dagpb"
+	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/multiformats/go-multicodec"
 	"github.com/urfave/cli/v2"
@@ -17,20 +22,7 @@ import (
 
 // ListCar is a command to output the cids in a car.
 func ListCar(c *cli.Context) error {
-	inStream := os.Stdin
 	var err error
-	if c.Args().Len() >= 1 {
-		inStream, err = os.Open(c.Args().First())
-		if err != nil {
-			return err
-		}
-		defer inStream.Close()
-	}
-	rd, err := carv2.NewBlockReader(inStream)
-	if err != nil {
-		return err
-	}
-
 	outStream := os.Stdout
 	if c.Args().Len() >= 2 {
 		outStream, err = os.Create(c.Args().Get(1))
@@ -40,6 +32,20 @@ func ListCar(c *cli.Context) error {
 	}
 	defer outStream.Close()
 
+	if c.Bool("unixfs") {
+		return listUnixfs(c, outStream)
+	}
+
+	inStream := os.Stdin
+	if c.Args().Len() >= 1 {
+		inStream, err = os.Open(c.Args().First())
+		if err != nil {
+			return err
+		}
+		defer inStream.Close()
+	}
+
+	rd, err := carv2.NewBlockReader(inStream)
 	if err != nil {
 		return err
 	}
@@ -114,4 +120,97 @@ func ListCar(c *cli.Context) error {
 	}
 
 	return err
+}
+
+func listUnixfs(c *cli.Context, outStream io.Writer) error {
+	if c.Args().Len() == 0 {
+		return fmt.Errorf("must provide file to read from. unixfs reading requires random access")
+	}
+
+	bs, err := blockstore.OpenReadOnly(c.Args().First())
+	if err != nil {
+		return err
+	}
+	ls := cidlink.DefaultLinkSystem()
+	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
+		cl, ok := l.(cidlink.Link)
+		if !ok {
+			return nil, fmt.Errorf("not a cidlink")
+		}
+		blk, err := bs.Get(cl.Cid)
+		if err != nil {
+			return nil, err
+		}
+		return bytes.NewBuffer(blk.RawData()), nil
+	}
+
+	roots, err := bs.Roots()
+	if err != nil {
+		return err
+	}
+	for _, r := range roots {
+		if err := printUnixFSNode(c, "", r, &ls, outStream); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkSystem, outStream io.Writer) error {
+	pbn, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: node}, dagpb.Type.PBNode)
+	if err != nil {
+		return err
+	}
+
+	pbnode := pbn.(dagpb.PBNode)
+
+	ufd, err := data.DecodeUnixFSData(pbnode.Data.Must().Bytes())
+	if err != nil {
+		return err
+	}
+
+	if ufd.FieldDataType().Int() == data.Data_Directory {
+		i := pbnode.Links.Iterator()
+		for !i.Done() {
+			_, l := i.Next()
+			name := path.Join(prefix, l.Name.Must().String())
+			fmt.Fprintf(outStream, "%s\n", name)
+			// recurse into the file/directory
+			cl, err := l.Hash.AsLink()
+			if err != nil {
+				return err
+			}
+			if cidl, ok := cl.(cidlink.Link); ok {
+				if err := printUnixFSNode(c, name, cidl.Cid, ls, outStream); err != nil {
+					return err
+				}
+			}
+
+		}
+	} else if ufd.FieldDataType().Int() == data.Data_HAMTShard {
+		hn, err := hamt.AttemptHAMTShardFromNode(c.Context, pbn, ls)
+		if err != nil {
+			return err
+		}
+		i := hn.Iterator()
+		for !i.Done() {
+			n, l := i.Next()
+			fmt.Fprintf(outStream, "%s\n", path.Join(prefix, n.String()))
+			// recurse into the file/directory
+			cl, err := l.AsLink()
+			if err != nil {
+				return err
+			}
+			if cidl, ok := cl.(cidlink.Link); ok {
+				if err := printUnixFSNode(c, path.Join(prefix, n.String()), cidl.Cid, ls, outStream); err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		// file, file chunk, symlink, other un-named entities.
+		return nil
+	}
+
+	return nil
 }

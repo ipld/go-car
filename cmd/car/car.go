@@ -99,6 +99,10 @@ func main1() int {
 						Aliases: []string{"v"},
 						Usage:   "Include verbose information about contained blocks",
 					},
+					&cli.BoolFlag{
+						Name:  "unixfs",
+						Usage: "List unixfs filesystem from the root of the car",
+					},
 				},
 			},
 			{
