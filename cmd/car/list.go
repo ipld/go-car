@@ -65,7 +65,7 @@ func ListCar(c *cli.Context) error {
 			if blk.Cid().Prefix().Codec == uint64(multicodec.DagPb) {
 				// parse as dag-pb
 				builder := dagpb.Type.PBNode.NewBuilder()
-				if err := dagpb.Unmarshal(builder, bytes.NewBuffer(blk.RawData())); err != nil {
+				if err := dagpb.DecodeBytes(builder, blk.RawData()); err != nil {
 					fmt.Fprintf(outStream, "\tnot interpretable as dag-pb: %s\n", err)
 					continue
 				}
