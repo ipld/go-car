@@ -86,6 +86,10 @@ func main1() int {
 						Usage:   "The type of index to write",
 						Value:   multicodec.CarMultihashIndexSorted.String(),
 					},
+					&cli.BoolFlag{
+						Name:  "v1",
+						Usage: "Write out only the carV1 file. Implies codec of 'none'",
+					},
 				},
 			},
 			{
