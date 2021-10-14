@@ -57,7 +57,6 @@ func CreateCar(c *cli.Context) error {
 	if err := cdest.Finalize(); err != nil {
 		return err
 	}
-	fmt.Printf("reopening for final root %d vs %d\n", len(proxyRoot.Bytes()), len(root.Bytes()))
 	// re-open/finalize with the final root.
 	return car.ReplaceRootsInFile(c.String("file"), []cid.Cid{root})
 }

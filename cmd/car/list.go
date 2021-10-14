@@ -157,6 +157,11 @@ func listUnixfs(c *cli.Context, outStream io.Writer) error {
 }
 
 func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkSystem, outStream io.Writer) error {
+	// it might be a raw file (bytes) node. if so, not actually an error.
+	if node.Prefix().Codec == cid.Raw {
+		return nil
+	}
+
 	pbn, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: node}, dagpb.Type.PBNode)
 	if err != nil {
 		return err
