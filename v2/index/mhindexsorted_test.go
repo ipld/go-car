@@ -49,6 +49,8 @@ func TestMultiWidthCodedIndex_MarshalUnmarshal(t *testing.T) {
 func TestMultiWidthCodedIndex_StableIterate(t *testing.T) {
 	rng := rand.New(rand.NewSource(1414))
 	records := generateIndexRecords(t, multihash.SHA2_256, rng)
+	records = append(records, generateIndexRecords(t, multihash.SHA2_512, rng)...)
+	records = append(records, generateIndexRecords(t, multihash.IDENTITY, rng)...)
 
 	// Create a new mh sorted index and load randomly generated records into it.
 	subject, err := index.New(multicodec.CarMultihashIndexSorted)
