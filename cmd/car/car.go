@@ -23,7 +23,7 @@ func main1() int {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:      "file",
-						Aliases:   []string{"f"},
+						Aliases:   []string{"f", "output", "o"},
 						Usage:     "The car file to write to",
 						TakesFile: true,
 					},
