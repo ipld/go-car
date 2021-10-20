@@ -132,6 +132,7 @@ func listUnixfs(c *cli.Context, outStream io.Writer) error {
 		return err
 	}
 	ls := cidlink.DefaultLinkSystem()
+	ls.TrustedStorage = true
 	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		cl, ok := l.(cidlink.Link)
 		if !ok {

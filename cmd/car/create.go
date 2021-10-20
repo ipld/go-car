@@ -63,6 +63,7 @@ func CreateCar(c *cli.Context) error {
 
 func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) (cid.Cid, error) {
 	ls := cidlink.DefaultLinkSystem()
+	ls.TrustedStorage = true
 	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		cl, ok := l.(cidlink.Link)
 		if !ok {

@@ -85,6 +85,7 @@ func GetCarDag(c *cli.Context) error {
 	}
 
 	ls := cidlink.DefaultLinkSystem()
+	ls.TrustedStorage = true
 	ls.StorageReadOpener = func(_ linking.LinkContext, l datamodel.Link) (io.Reader, error) {
 		if cl, ok := l.(*cidlink.Link); ok {
 			blk, err := bs.Get(cl.Cid)
