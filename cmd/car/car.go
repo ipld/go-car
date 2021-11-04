@@ -35,6 +35,25 @@ func main1() int {
 				Action: DetachCar,
 			},
 			{
+				Name:    "extract",
+				Aliases: []string{"x"},
+				Usage:   "Extract the contents of a car",
+				Action:  ExtractCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "file",
+						Aliases:   []string{"f"},
+						Usage:     "The car file to extract from",
+						TakesFile: true,
+					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Usage:   "Include verbose information about extracted contents",
+					},
+				},
+			},
+			{
 				Name:    "filter",
 				Aliases: []string{"f"},
 				Usage:   "Filter the CIDs in a car",
