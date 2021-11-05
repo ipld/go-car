@@ -15,6 +15,7 @@ import (
 	dagpb "github.com/ipld/go-codec-dagpb"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,11 +32,7 @@ func ExtractCar(c *cli.Context) error {
 		outputDir = c.Args().First()
 	}
 
-	if c.IsSet("verbose") {
-		fmt.Printf("writing to %s\n", outputDir)
-	}
-
-	bs, err := blockstore.OpenReadOnly(c.Args().Get(0))
+	bs, err := blockstore.OpenReadOnly(c.String("file"))
 	if err != nil {
 		return err
 	}
@@ -109,33 +106,67 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputDir stri
 			if err != nil {
 				return err
 			}
-			if val.Kind() == ipld.Kind_Map {
-				// interpret dagpb 'data' as unixfs data and look at type.
-				ufsData, err := val.LookupByString("Data")
-				if err != nil {
+			if c.IsSet("verbose") {
+				fmt.Fprintf(os.Stdout, "%s\n", path.Join(outputDir, ks))
+			}
+
+			if val.Kind() != ipld.Kind_Link {
+				return fmt.Errorf("unexpected map value for %s at %s", ks, outputDir)
+			}
+			// a directory may be represented as a map of name:<link> if unixADL is applied
+			vl, err := val.AsLink()
+			if err != nil {
+				return err
+			}
+			dest, err := ls.Load(ipld.LinkContext{}, vl, basicnode.Prototype.Any)
+			if err != nil {
+				return err
+			}
+			// degenerate files are handled here.
+			if dest.Kind() == ipld.Kind_Bytes {
+				if err := extractFile(c, ls, dest, path.Join(outputDir, ks)); err != nil {
 					return err
 				}
-				ufsBytes, err := ufsData.AsBytes()
-				if err != nil {
-					return err
-				}
-				ufsNode, err := data.DecodeUnixFSData(ufsBytes)
-				if err != nil {
-					return err
-				}
-				if ufsNode.DataType.Int() == data.Data_Directory || ufsNode.DataType.Int() == data.Data_HAMTShard {
-					if err := extractDir(c, ls, val, path.Join(outputDir, ks)); err != nil {
-						return err
-					}
-				} else if ufsNode.DataType.Int() == data.Data_File || ufsNode.DataType.Int() == data.Data_Raw {
-					if err := extractFile(c, ls, val, path.Join(outputDir, ks)); err != nil {
-						return err
-					}
-				} else if ufsNode.DataType.Int() == data.Data_Symlink {
-					// TODO: symlink
-				}
+				continue
 			} else {
-				if err := extractFile(c, ls, val, path.Join(outputDir, ks)); err != nil {
+				// dir / pbnode
+				pbb := dagpb.Type.PBNode.NewBuilder()
+				if err := pbb.AssignNode(dest); err != nil {
+					return err
+				}
+				dest = pbb.Build()
+			}
+			pbnode := dest.(dagpb.PBNode)
+
+			// interpret dagpb 'data' as unixfs data and look at type.
+			ufsData, err := pbnode.LookupByString("Data")
+			if err != nil {
+				return err
+			}
+			ufsBytes, err := ufsData.AsBytes()
+			if err != nil {
+				return err
+			}
+			ufsNode, err := data.DecodeUnixFSData(ufsBytes)
+			if err != nil {
+				return err
+			}
+			if ufsNode.DataType.Int() == data.Data_Directory || ufsNode.DataType.Int() == data.Data_HAMTShard {
+				ufn, err := unixfsnode.Reify(ipld.LinkContext{}, pbnode, ls)
+				if err != nil {
+					return err
+				}
+
+				if err := extractDir(c, ls, ufn, path.Join(outputDir, ks)); err != nil {
+					return err
+				}
+			} else if ufsNode.DataType.Int() == data.Data_File || ufsNode.DataType.Int() == data.Data_Raw {
+				if err := extractFile(c, ls, pbnode, path.Join(outputDir, ks)); err != nil {
+					return err
+				}
+			} else if ufsNode.DataType.Int() == data.Data_Symlink {
+				data := ufsNode.Data.Must().Bytes()
+				if err := os.Symlink(string(data), path.Join(outputDir, ks)); err != nil {
 					return err
 				}
 			}
