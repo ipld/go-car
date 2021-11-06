@@ -44,6 +44,7 @@ func main1() int {
 						Name:      "file",
 						Aliases:   []string{"f"},
 						Usage:     "The car file to extract from",
+						Required:  true,
 						TakesFile: true,
 					},
 					&cli.BoolFlag{

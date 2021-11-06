@@ -22,14 +22,11 @@ import (
 
 // ExtractCar pulls files and directories out of a car
 func ExtractCar(c *cli.Context) error {
-	if !c.IsSet("file") {
-		return fmt.Errorf("a file source must be specified")
-	}
 	outputDir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if c.Args().Len() > 0 {
+	if c.Args().Present() {
 		outputDir = c.Args().First()
 	}
 
@@ -69,7 +66,7 @@ func ExtractCar(c *cli.Context) error {
 func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir string) error {
 	if root.Prefix().Codec == cid.Raw {
 		if c.IsSet("verbose") {
-			fmt.Fprintf(os.Stderr, "skipping raw root %s\n", root)
+			fmt.Fprintf(c.App.ErrWriter, "skipping raw root %s\n", root)
 		}
 		return nil
 	}
@@ -143,7 +140,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 				return err
 			}
 			if c.IsSet("verbose") {
-				fmt.Fprintf(os.Stdout, "%s\n", nextRes)
+				fmt.Fprintf(c.App.Writer, "%s\n", nextRes)
 			}
 
 			if val.Kind() != ipld.Kind_Link {
