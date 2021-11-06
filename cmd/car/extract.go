@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-unixfsnode"
@@ -84,16 +85,47 @@ func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir st
 		return err
 	}
 
-	if err := extractDir(c, ls, ufn, outputDir); err != nil {
+	outputResolvedDir, err := filepath.EvalSymlinks(outputDir)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(outputResolvedDir); os.IsNotExist(err) {
+		if err := os.Mkdir(outputResolvedDir, 0755); err != nil {
+			return err
+		}
+	}
+	if err := extractDir(c, ls, ufn, outputResolvedDir, "/"); err != nil {
 		return fmt.Errorf("%s: %w", root, err)
 	}
 
 	return nil
 }
 
-func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputDir string) error {
+func resolvePath(root, pth string) (string, error) {
+	rp, err := filepath.Rel("/", pth)
+	if err != nil {
+		return "", fmt.Errorf("couldn't check relative-ness of %s: %w", pth, err)
+	}
+	joined := path.Join(root, rp)
+
+	basename := path.Dir(joined)
+	final, err := filepath.EvalSymlinks(basename)
+	if err != nil {
+		return "", fmt.Errorf("couldn't eval symlinks in %s: %w", basename, err)
+	}
+	if final != path.Clean(basename) {
+		return "", fmt.Errorf("path attempts to redirect through symlinks")
+	}
+	return joined, nil
+}
+
+func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, outputPath string) error {
+	dirPath, err := resolvePath(outputRoot, outputPath)
+	if err != nil {
+		return err
+	}
 	// make the directory.
-	os.MkdirAll(outputDir, 0755)
+	os.MkdirAll(dirPath, 0755)
 
 	if n.Kind() == ipld.Kind_Map {
 		mi := n.MapIterator()
@@ -106,12 +138,16 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputDir stri
 			if err != nil {
 				return err
 			}
+			nextRes, err := resolvePath(outputRoot, path.Join(outputPath, ks))
+			if err != nil {
+				return err
+			}
 			if c.IsSet("verbose") {
-				fmt.Fprintf(os.Stdout, "%s\n", path.Join(outputDir, ks))
+				fmt.Fprintf(os.Stdout, "%s\n", nextRes)
 			}
 
 			if val.Kind() != ipld.Kind_Link {
-				return fmt.Errorf("unexpected map value for %s at %s", ks, outputDir)
+				return fmt.Errorf("unexpected map value for %s at %s", ks, outputPath)
 			}
 			// a directory may be represented as a map of name:<link> if unixADL is applied
 			vl, err := val.AsLink()
@@ -124,7 +160,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputDir stri
 			}
 			// degenerate files are handled here.
 			if dest.Kind() == ipld.Kind_Bytes {
-				if err := extractFile(c, ls, dest, path.Join(outputDir, ks)); err != nil {
+				if err := extractFile(c, ls, dest, nextRes); err != nil {
 					return err
 				}
 				continue
@@ -157,16 +193,16 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputDir stri
 					return err
 				}
 
-				if err := extractDir(c, ls, ufn, path.Join(outputDir, ks)); err != nil {
+				if err := extractDir(c, ls, ufn, outputRoot, path.Join(outputPath, ks)); err != nil {
 					return err
 				}
 			} else if ufsNode.DataType.Int() == data.Data_File || ufsNode.DataType.Int() == data.Data_Raw {
-				if err := extractFile(c, ls, pbnode, path.Join(outputDir, ks)); err != nil {
+				if err := extractFile(c, ls, pbnode, nextRes); err != nil {
 					return err
 				}
 			} else if ufsNode.DataType.Int() == data.Data_Symlink {
 				data := ufsNode.Data.Must().Bytes()
-				if err := os.Symlink(string(data), path.Join(outputDir, ks)); err != nil {
+				if err := os.Symlink(string(data), nextRes); err != nil {
 					return err
 				}
 			}
@@ -181,6 +217,7 @@ func extractFile(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputName st
 	if err != nil {
 		return err
 	}
+
 	f, err := os.Create(outputName)
 	if err != nil {
 		return err
