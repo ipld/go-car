@@ -122,7 +122,9 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 		return err
 	}
 	// make the directory.
-	os.MkdirAll(dirPath, 0755)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return err
+	}
 
 	if n.Kind() == ipld.Kind_Map {
 		mi := n.MapIterator()

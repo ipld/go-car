@@ -37,7 +37,7 @@ func main1() int {
 			{
 				Name:    "extract",
 				Aliases: []string{"x"},
-				Usage:   "Extract the contents of a car",
+				Usage:   "Extract the contents of a car when the car encodes UnixFS data",
 				Action:  ExtractCar,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
