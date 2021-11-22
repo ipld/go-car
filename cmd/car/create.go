@@ -69,7 +69,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 		if !ok {
 			return nil, fmt.Errorf("not a cidlink")
 		}
-		blk, err := bs.Get(cl.Cid)
+		blk, err := bs.Get(ctx, cl.Cid)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +86,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 			if err != nil {
 				return err
 			}
-			bs.Put(blk)
+			bs.Put(ctx, blk)
 			return nil
 		}, nil
 	}

@@ -46,7 +46,7 @@ func GetCarBlock(c *cli.Context) error {
 		return err
 	}
 
-	blk, err := bs.Get(blkCid)
+	blk, err := bs.Get(c.Context, blkCid)
 	if err != nil {
 		return err
 	}
@@ -97,15 +97,15 @@ func GetCarDag(c *cli.Context) error {
 
 	switch c.Int("version") {
 	case 2:
-		return writeCarV2(rootCid, output, bs, strict, sel, linkVisitOnlyOnce)
+		return writeCarV2(c.Context, rootCid, output, bs, strict, sel, linkVisitOnlyOnce)
 	case 1:
-		return writeCarV1(rootCid, output, bs, strict, sel, linkVisitOnlyOnce)
+		return writeCarV1(c.Context, rootCid, output, bs, strict, sel, linkVisitOnlyOnce)
 	default:
 		return fmt.Errorf("invalid CAR version %d", c.Int("version"))
 	}
 }
 
-func writeCarV2(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
+func writeCarV2(ctx context.Context, rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
 	_ = os.Remove(output)
 
 	outStore, err := blockstore.OpenReadWrite(output, []cid.Cid{rootCid}, blockstore.AllowDuplicatePuts(false))
@@ -117,7 +117,7 @@ func writeCarV2(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict 
 	ls.TrustedStorage = true
 	ls.StorageReadOpener = func(_ linking.LinkContext, l datamodel.Link) (io.Reader, error) {
 		if cl, ok := l.(cidlink.Link); ok {
-			blk, err := bs.Get(cl.Cid)
+			blk, err := bs.Get(ctx, cl.Cid)
 			if err != nil {
 				if err == ipfsbs.ErrNotFound {
 					if strict {
@@ -167,12 +167,12 @@ func writeCarV2(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict 
 	return outStore.Finalize()
 }
 
-func writeCarV1(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
+func writeCarV1(ctx context.Context, rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
 	opts := make([]car.Option, 0)
 	if linkVisitOnlyOnce {
 		opts = append(opts, car.TraverseLinksOnlyOnce())
 	}
-	sc := car.NewSelectiveCar(context.Background(), bs, []car.Dag{{Root: rootCid, Selector: sel}}, opts...)
+	sc := car.NewSelectiveCar(ctx, bs, []car.Dag{{Root: rootCid, Selector: sel}}, opts...)
 	f, err := os.Create(output)
 	if err != nil {
 		return err
