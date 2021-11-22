@@ -65,7 +65,7 @@ func BenchmarkOpenReadOnlyV1(b *testing.B) {
 			}
 
 			for _, c := range shuffledCIDs {
-				_, err := bs.Get(c)
+				_, err := bs.Get(bg, c)
 				if err != nil {
 					b.Fatal(err)
 				}

@@ -48,7 +48,7 @@ func TestRoundtrip(t *testing.T) {
 	}
 
 	bserv := dstest.Bserv()
-	ch, err := car.LoadCar(bserv.Blockstore(), buf)
+	ch, err := car.LoadCar(context.Background(), bserv.Blockstore(), buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRoundtrip(t *testing.T) {
 
 	bs := bserv.Blockstore()
 	for _, nd := range []format.Node{a, b, c, nd1, nd2, nd3} {
-		has, err := bs.Has(nd.Cid())
+		has, err := bs.Has(context.Background(), nd.Cid())
 		if err != nil {
 			t.Fatal(err)
 		}

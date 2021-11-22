@@ -32,6 +32,7 @@ var (
 	rng                       = rand.New(rand.NewSource(1413))
 	oneTestBlockWithCidV1     = merkledag.NewRawNode([]byte("fish")).Block
 	anotherTestBlockWithCidV0 = blocks.NewBlock([]byte("barreleye"))
+	bg                        = context.Background()
 )
 
 func TestReadWriteGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) {
@@ -42,7 +43,7 @@ func TestReadWriteGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) 
 	nonExistingKey := merkledag.NewRawNode([]byte("undadasea")).Block.Cid()
 
 	// Assert blockstore API returns blockstore.ErrNotFound
-	gotBlock, err := subject.Get(nonExistingKey)
+	gotBlock, err := subject.Get(bg, nonExistingKey)
 	require.Equal(t, ipfsblockstore.ErrNotFound, err)
 	require.Nil(t, gotBlock)
 }
@@ -71,13 +72,13 @@ func TestBlockstore(t *testing.T) {
 		}
 		require.NoError(t, err)
 
-		err = ingester.Put(b)
+		err = ingester.Put(bg, b)
 		require.NoError(t, err)
 		cids = append(cids, b.Cid())
 
 		// try reading a random one:
 		candidate := cids[rng.Intn(len(cids))]
-		if has, err := ingester.Has(candidate); !has || err != nil {
+		if has, err := ingester.Has(bg, candidate); !has || err != nil {
 			t.Fatalf("expected to find %s but didn't: %s", candidate, err)
 		}
 
@@ -89,7 +90,7 @@ func TestBlockstore(t *testing.T) {
 	}
 
 	for _, c := range cids {
-		b, err := ingester.Get(c)
+		b, err := ingester.Get(bg, c)
 		require.NoError(t, err)
 		if !b.Cid().Equals(c) {
 			t.Fatal("wrong item returned")
@@ -106,7 +107,7 @@ func TestBlockstore(t *testing.T) {
 	require.NoError(t, err)
 	numKeysCh := 0
 	for c := range allKeysCh {
-		b, err := robs.Get(c)
+		b, err := robs.Get(bg, c)
 		require.NoError(t, err)
 		if !b.Cid().Equals(c) {
 			t.Fatal("wrong item returned")
@@ -117,7 +118,7 @@ func TestBlockstore(t *testing.T) {
 	require.Equal(t, expectedCidCount, numKeysCh, "AllKeysChan returned an unexpected amount of keys; expected %v but got %v", expectedCidCount, numKeysCh)
 
 	for _, c := range cids {
-		b, err := robs.Get(c)
+		b, err := robs.Get(bg, c)
 		require.NoError(t, err)
 		if !b.Cid().Equals(c) {
 			t.Fatal("wrong item returned")
@@ -209,26 +210,26 @@ func TestBlockstorePutSameHashes(t *testing.T) {
 			// Has should never error here.
 			// The first block should be missing.
 			// Others might not, given the duplicate hashes.
-			has, err := bs.Has(block.Cid())
+			has, err := bs.Has(bg, block.Cid())
 			require.NoError(t, err)
 			if i == 0 {
 				require.False(t, has)
 			}
 
-			err = bs.Put(block)
+			err = bs.Put(bg, block)
 			require.NoError(t, err)
 
 			// Has, Get, and GetSize need to work right after a Put.
-			has, err = bs.Has(block.Cid())
+			has, err = bs.Has(bg, block.Cid())
 			require.NoError(t, err)
 			require.True(t, has)
 
-			got, err := bs.Get(block.Cid())
+			got, err := bs.Get(bg, block.Cid())
 			require.NoError(t, err)
 			require.Equal(t, block.Cid(), got.Cid())
 			require.Equal(t, block.RawData(), got.RawData())
 
-			size, err := bs.GetSize(block.Cid())
+			size, err := bs.GetSize(bg, block.Cid())
 			require.NoError(t, err)
 			require.Equal(t, len(block.RawData()), size)
 		}
@@ -285,14 +286,14 @@ func TestBlockstoreConcurrentUse(t *testing.T) {
 			block, err := blocks.NewBlockWithCid(data, c)
 			require.NoError(t, err)
 
-			has, err := wbs.Has(block.Cid())
+			has, err := wbs.Has(bg, block.Cid())
 			require.NoError(t, err)
 			require.False(t, has)
 
-			err = wbs.Put(block)
+			err = wbs.Put(bg, block)
 			require.NoError(t, err)
 
-			got, err := wbs.Get(block.Cid())
+			got, err := wbs.Get(bg, block.Cid())
 			require.NoError(t, err)
 			require.Equal(t, data, got.RawData())
 		}()
@@ -320,7 +321,7 @@ func TestBlockstoreNullPadding(t *testing.T) {
 	roots, err := rbs.Roots()
 	require.NoError(t, err)
 
-	has, err := rbs.Has(roots[0])
+	has, err := rbs.Has(bg, roots[0])
 	require.NoError(t, err)
 	require.True(t, has)
 
@@ -330,7 +331,7 @@ func TestBlockstoreNullPadding(t *testing.T) {
 	allKeysCh, err := rbs.AllKeysChan(ctx)
 	require.NoError(t, err)
 	for c := range allKeysCh {
-		b, err := rbs.Get(c)
+		b, err := rbs.Get(bg, c)
 		require.NoError(t, err)
 		if !b.Cid().Equals(c) {
 			t.Fatal("wrong item returned")
@@ -390,7 +391,7 @@ func TestBlockstoreResumption(t *testing.T) {
 				blockstore.UseWholeCIDs(true))
 			require.NoError(t, err)
 		}
-		require.NoError(t, subject.Put(b))
+		require.NoError(t, subject.Put(bg, b))
 
 		// With 10% chance test read operations on an resumed read-write blockstore.
 		// We don't test on every put to reduce test runtime.
@@ -404,10 +405,10 @@ func TestBlockstoreResumption(t *testing.T) {
 			keysChan, err := subject.AllKeysChan(ctx)
 			require.NoError(t, err)
 			for k := range keysChan {
-				has, err := subject.Has(k)
+				has, err := subject.Has(bg, k)
 				require.NoError(t, err)
 				require.True(t, has)
-				gotBlock, err := subject.Get(k)
+				gotBlock, err := subject.Get(bg, k)
 				require.NoError(t, err)
 				require.Equal(t, wantBlocks[k], gotBlock)
 				gotBlockCountSoFar++
@@ -493,14 +494,14 @@ func TestReadWritePanicsOnlyWhenFinalized(t *testing.T) {
 	subject, err := blockstore.OpenReadWrite(path, wantRoots)
 	require.NoError(t, err)
 
-	require.NoError(t, subject.Put(oneTestBlockWithCidV1))
-	require.NoError(t, subject.Put(anotherTestBlockWithCidV0))
+	require.NoError(t, subject.Put(bg, oneTestBlockWithCidV1))
+	require.NoError(t, subject.Put(bg, anotherTestBlockWithCidV0))
 
-	gotBlock, err := subject.Get(oneTestBlockCid)
+	gotBlock, err := subject.Get(bg, oneTestBlockCid)
 	require.NoError(t, err)
 	require.Equal(t, oneTestBlockWithCidV1, gotBlock)
 
-	gotSize, err := subject.GetSize(oneTestBlockCid)
+	gotSize, err := subject.GetSize(bg, oneTestBlockCid)
 	require.NoError(t, err)
 	require.Equal(t, len(oneTestBlockWithCidV1.RawData()), gotSize)
 
@@ -508,13 +509,13 @@ func TestReadWritePanicsOnlyWhenFinalized(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, wantRoots, gotRoots)
 
-	has, err := subject.Has(oneTestBlockCid)
+	has, err := subject.Has(bg, oneTestBlockCid)
 	require.NoError(t, err)
 	require.True(t, has)
 
 	subject.HashOnRead(true)
 	// Delete should always error regardless of finalize
-	require.Error(t, subject.DeleteBlock(oneTestBlockCid))
+	require.Error(t, subject.DeleteBlock(bg, oneTestBlockCid))
 
 	require.NoError(t, subject.Finalize())
 	require.Error(t, subject.Finalize())
@@ -522,18 +523,18 @@ func TestReadWritePanicsOnlyWhenFinalized(t *testing.T) {
 	_, ok := (interface{})(subject).(io.Closer)
 	require.False(t, ok)
 
-	_, err = subject.Get(oneTestBlockCid)
+	_, err = subject.Get(bg, oneTestBlockCid)
 	require.Error(t, err)
-	_, err = subject.GetSize(anotherTestBlockCid)
+	_, err = subject.GetSize(bg, anotherTestBlockCid)
 	require.Error(t, err)
-	_, err = subject.Has(anotherTestBlockCid)
+	_, err = subject.Has(bg, anotherTestBlockCid)
 	require.Error(t, err)
 
-	require.Error(t, subject.Put(oneTestBlockWithCidV1))
-	require.Error(t, subject.PutMany([]blocks.Block{anotherTestBlockWithCidV0}))
+	require.Error(t, subject.Put(bg, oneTestBlockWithCidV1))
+	require.Error(t, subject.PutMany(bg, []blocks.Block{anotherTestBlockWithCidV0}))
 	_, err = subject.AllKeysChan(context.Background())
 	require.Error(t, err)
-	require.Error(t, subject.DeleteBlock(oneTestBlockCid))
+	require.Error(t, subject.DeleteBlock(bg, oneTestBlockCid))
 }
 
 func TestReadWriteWithPaddingWorksAsExpected(t *testing.T) {
@@ -550,8 +551,8 @@ func TestReadWriteWithPaddingWorksAsExpected(t *testing.T) {
 		carv2.UseDataPadding(wantCarV1Padding),
 		carv2.UseIndexPadding(wantIndexPadding))
 	require.NoError(t, err)
-	require.NoError(t, subject.Put(oneTestBlockWithCidV1))
-	require.NoError(t, subject.Put(anotherTestBlockWithCidV0))
+	require.NoError(t, subject.Put(bg, oneTestBlockWithCidV1))
+	require.NoError(t, subject.Put(bg, anotherTestBlockWithCidV0))
 	require.NoError(t, subject.Finalize())
 
 	// Assert CARv2 header contains right offsets.
@@ -649,7 +650,7 @@ func TestReadWriteResumptionFromFileWithDifferentCarV1PaddingIsError(t *testing.
 		WantRoots,
 		carv2.UseDataPadding(1413))
 	require.NoError(t, err)
-	require.NoError(t, subject.Put(oneTestBlockWithCidV1))
+	require.NoError(t, subject.Put(bg, oneTestBlockWithCidV1))
 	require.NoError(t, subject.Finalize())
 
 	resumingSubject, err := blockstore.OpenReadWrite(
@@ -672,16 +673,16 @@ func TestReadWriteErrorAfterClose(t *testing.T) {
 		bs, err := blockstore.OpenReadWrite(path, []cid.Cid{root.Cid()})
 		require.NoError(t, err)
 
-		err = bs.Put(root)
+		err = bs.Put(bg, root)
 		require.NoError(t, err)
 
 		roots, err := bs.Roots()
 		require.NoError(t, err)
-		_, err = bs.Has(roots[0])
+		_, err = bs.Has(bg, roots[0])
 		require.NoError(t, err)
-		_, err = bs.Get(roots[0])
+		_, err = bs.Get(bg, roots[0])
 		require.NoError(t, err)
-		_, err = bs.GetSize(roots[0])
+		_, err = bs.GetSize(bg, roots[0])
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -693,16 +694,16 @@ func TestReadWriteErrorAfterClose(t *testing.T) {
 
 		_, err = bs.Roots()
 		require.Error(t, err)
-		_, err = bs.Has(roots[0])
+		_, err = bs.Has(bg, roots[0])
 		require.Error(t, err)
-		_, err = bs.Get(roots[0])
+		_, err = bs.Get(bg, roots[0])
 		require.Error(t, err)
-		_, err = bs.GetSize(roots[0])
+		_, err = bs.GetSize(bg, roots[0])
 		require.Error(t, err)
 		_, err = bs.AllKeysChan(ctx)
 		require.Error(t, err)
 
-		err = bs.Put(root)
+		err = bs.Put(bg, root)
 		require.Error(t, err)
 
 		// TODO: test that closing blocks if an AllKeysChan operation is
@@ -722,14 +723,14 @@ func TestOpenReadWrite_WritesIdentityCIDsWhenOptionIsEnabled(t *testing.T) {
 
 	idBlock, err := blocks.NewBlockWithCid(data, idCid)
 	require.NoError(t, err)
-	err = subject.Put(idBlock)
+	err = subject.Put(bg, idBlock)
 	require.NoError(t, err)
 
-	has, err := subject.Has(idCid)
+	has, err := subject.Has(bg, idCid)
 	require.NoError(t, err)
 	require.True(t, has)
 
-	gotBlock, err := subject.Get(idCid)
+	gotBlock, err := subject.Get(bg, idCid)
 	require.NoError(t, err)
 	require.Equal(t, idBlock, gotBlock)
 
@@ -813,7 +814,7 @@ func TestOpenReadWrite_ErrorsWhenWritingTooLargeOfACid(t *testing.T) {
 
 	bigBlock, err := blocks.NewBlockWithCid(data, bigCid)
 	require.NoError(t, err)
-	err = subject.Put(bigBlock)
+	err = subject.Put(bg, bigBlock)
 	require.Equal(t, &carv2.ErrCidTooLarge{MaxSize: maxAllowedCidSize, CurrentSize: bigCidLen}, err)
 }
 
@@ -839,7 +840,7 @@ func TestReadWrite_ReWritingCARv1WithIdentityCidIsIdenticalToOriginalWithOptions
 		if next.Cid().Prefix().MhType == multihash.IDENTITY {
 			idCidCount++
 		}
-		err = subject.Put(next)
+		err = subject.Put(bg, next)
 		require.NoError(t, err)
 	}
 	require.NotZero(t, idCidCount)

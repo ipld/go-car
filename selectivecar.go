@@ -149,7 +149,7 @@ func (sc SelectiveCarPrepared) Dump(w io.Writer) error {
 		return fmt.Errorf("failed to write car header: %s", err)
 	}
 	for _, c := range sc.cids {
-		blk, err := sc.store.Get(c)
+		blk, err := sc.store.Get(sc.ctx, c)
 		if err != nil {
 			return err
 		}
@@ -223,7 +223,7 @@ func (sct *selectiveCarTraverser) loader(ctx ipld.LinkContext, lnk ipld.Link) (i
 		return nil, errors.New("incorrect link type")
 	}
 	c := cl.Cid
-	blk, err := sct.sc.store.Get(c)
+	blk, err := sct.sc.store.Get(ctx.Ctx, c)
 	if err != nil {
 		return nil, err
 	}

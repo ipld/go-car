@@ -57,7 +57,7 @@ func ExampleOpenReadOnly() {
 			cancel()
 			break
 		}
-		size, err := robs.GetSize(k)
+		size, err := robs.GetSize(bg, k)
 		if err != nil {
 			panic(err)
 		}
@@ -96,13 +96,13 @@ func ExampleOpenReadWrite() {
 
 	// Put all blocks onto the blockstore.
 	blocks := []blocks.Block{thisBlock, thatBlock}
-	if err := rwbs.PutMany(blocks); err != nil {
+	if err := rwbs.PutMany(bg, blocks); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Successfully wrote %v blocks into the blockstore.\n", len(blocks))
 
 	// Any blocks put can be read back using the same blockstore instance.
-	block, err := rwbs.Get(thatBlock.Cid())
+	block, err := rwbs.Get(bg, thatBlock.Cid())
 	if err != nil {
 		panic(err)
 	}
@@ -122,13 +122,13 @@ func ExampleOpenReadWrite() {
 	}
 
 	// Put another block, appending it to the set of blocks that are written previously.
-	if err := resumedRwbos.Put(andTheOtherBlock); err != nil {
+	if err := resumedRwbos.Put(bg, andTheOtherBlock); err != nil {
 		panic(err)
 	}
 
 	// Read back the the block put before resumption.
 	// Blocks previously put are present.
-	block, err = resumedRwbos.Get(thatBlock.Cid())
+	block, err = resumedRwbos.Get(bg, thatBlock.Cid())
 	if err != nil {
 		panic(err)
 	}
@@ -136,7 +136,7 @@ func ExampleOpenReadWrite() {
 
 	// Put an additional block to the CAR.
 	// Blocks put after resumption are also present.
-	block, err = resumedRwbos.Get(andTheOtherBlock.Cid())
+	block, err = resumedRwbos.Get(bg, andTheOtherBlock.Cid())
 	if err != nil {
 		panic(err)
 	}

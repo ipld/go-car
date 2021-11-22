@@ -18,13 +18,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var bg = context.Background()
+
 func TestReadOnlyGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) {
 	subject, err := OpenReadOnly("../testdata/sample-v1.car")
 	require.NoError(t, err)
 	nonExistingKey := merkledag.NewRawNode([]byte("lobstermuncher")).Block.Cid()
 
 	// Assert blockstore API returns blockstore.ErrNotFound
-	gotBlock, err := subject.Get(nonExistingKey)
+	gotBlock, err := subject.Get(bg, nonExistingKey)
 	require.Equal(t, blockstore.ErrNotFound, err)
 	require.Nil(t, gotBlock)
 }
@@ -87,25 +89,25 @@ func TestReadOnly(t *testing.T) {
 				wantCids = append(wantCids, key)
 
 				// Assert blockstore contains key.
-				has, err := subject.Has(key)
+				has, err := subject.Has(bg, key)
 				require.NoError(t, err)
 				require.True(t, has)
 
 				// Assert size matches block raw data length.
-				gotSize, err := subject.GetSize(key)
+				gotSize, err := subject.GetSize(bg, key)
 				wantSize := len(wantBlock.RawData())
 				require.NoError(t, err)
 				require.Equal(t, wantSize, gotSize)
 
 				// Assert block itself matches v1 payload block.
-				gotBlock, err := subject.Get(key)
+				gotBlock, err := subject.Get(bg, key)
 				require.NoError(t, err)
 				require.Equal(t, wantBlock, gotBlock)
 
 				// Assert write operations error
-				require.Error(t, subject.Put(wantBlock))
-				require.Error(t, subject.PutMany([]blocks.Block{wantBlock}))
-				require.Error(t, subject.DeleteBlock(key))
+				require.Error(t, subject.Put(bg, wantBlock))
+				require.Error(t, subject.PutMany(bg, []blocks.Block{wantBlock}))
+				require.Error(t, subject.DeleteBlock(bg, key))
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
@@ -243,11 +245,11 @@ func TestReadOnlyErrorAfterClose(t *testing.T) {
 
 	roots, err := bs.Roots()
 	require.NoError(t, err)
-	_, err = bs.Has(roots[0])
+	_, err = bs.Has(bg, roots[0])
 	require.NoError(t, err)
-	_, err = bs.Get(roots[0])
+	_, err = bs.Get(bg, roots[0])
 	require.NoError(t, err)
-	_, err = bs.GetSize(roots[0])
+	_, err = bs.GetSize(bg, roots[0])
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -259,11 +261,11 @@ func TestReadOnlyErrorAfterClose(t *testing.T) {
 
 	_, err = bs.Roots()
 	require.Error(t, err)
-	_, err = bs.Has(roots[0])
+	_, err = bs.Has(bg, roots[0])
 	require.Error(t, err)
-	_, err = bs.Get(roots[0])
+	_, err = bs.Get(bg, roots[0])
 	require.Error(t, err)
-	_, err = bs.GetSize(roots[0])
+	_, err = bs.GetSize(bg, roots[0])
 	require.Error(t, err)
 	_, err = bs.AllKeysChan(ctx)
 	require.Error(t, err)
@@ -293,7 +295,7 @@ func TestNewReadOnly_CarV1WithoutIndexWorksAsExpected(t *testing.T) {
 	require.NoError(t, err)
 
 	// Require that the block is found via ReadOnly API and contetns are as expected.
-	gotBlock, err := subject.Get(wantBlock.Cid())
+	gotBlock, err := subject.Get(bg, wantBlock.Cid())
 	require.NoError(t, err)
 	require.Equal(t, wantBlock, gotBlock)
 }
