@@ -3,7 +3,9 @@ package car
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"os"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car/v2/internal/carv1"
@@ -15,6 +17,8 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	"github.com/multiformats/go-varint"
 )
+
+const ErrSizeMismatch = "car-error-sizemismatch"
 
 // PrepareTraversal walks through the proposed dag traversal to learn it's total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
@@ -38,6 +42,40 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 		opts:     opts,
 	}
 	return &tc, nil
+}
+
+func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
+	tc := traversalCar{
+		size:     0,
+		ctx:      ctx,
+		root:     root,
+		selector: selector,
+		ls:       ls,
+		opts:     opts,
+	}
+
+	fp, err := os.Create(destination)
+	if err != nil {
+		return err
+	}
+	defer fp.Close()
+
+	_, err = tc.WriteTo(fp)
+	if err != nil {
+		return err
+	}
+
+	// fix header size.
+	if _, err = fp.Seek(0, 0); err != nil {
+		return err
+	}
+
+	tc.size = uint64(tc.size)
+	if _, err = tc.WriteHeader(fp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Traversal is a allows writing a car with the data specified by a selector.
@@ -75,14 +113,20 @@ func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return h, err
 	}
+	v1Size := hn
 
 	// write the block.
 	wls, writer := teeingLinkSystem(*tc.ls, w)
 	err = traverse(tc.ctx, &wls, tc.root, tc.selector, tc.opts...)
 	h += int64(writer.size)
+	v1Size += writer.size
 	if err != nil {
 		return h, err
 	}
+	if tc.size != 0 && tc.size != v1Size {
+		return h, fmt.Errorf(ErrSizeMismatch)
+	}
+	tc.size = v1Size
 
 	return h, nil
 }
