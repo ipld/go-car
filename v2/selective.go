@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"github.com/ipfs/go-cid"
@@ -18,11 +19,24 @@ import (
 	"github.com/multiformats/go-varint"
 )
 
+// ErrSizeMismatch is returned when a written traversal realizes the written header size does not
+// match the actual number of car bytes written.
 const ErrSizeMismatch = "car-error-sizemismatch"
+
+// MaxTraversalLinks changes the allowed number of links a selector traversal
+// can execute before failing.
+//
+// Note that setting this option may cause an error to be returned from selector
+// execution when building a SelectiveCar.
+func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
+	return func(sco *Options) {
+		sco.MaxTraversalLinks = MaxTraversalLinks
+	}
+}
 
 // PrepareTraversal walks through the proposed dag traversal to learn it's total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
-func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Traversal, error) {
+func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
 	cls, cntr := countingLinkSystem(*ls)
 
 	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
@@ -30,7 +44,7 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 	if err != nil {
 		return nil, err
 	}
-	if err := traverse(ctx, &cls, root, selector, opts...); err != nil {
+	if err := traverse(ctx, &cls, root, selector, ApplyOptions(opts...)); err != nil {
 		return nil, err
 	}
 	tc := traversalCar{
@@ -44,6 +58,7 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 	return &tc, nil
 }
 
+// FileTraversal writes a carv2 matching a given root and selector to a file path.
 func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
 	tc := traversalCar{
 		size:     0,
@@ -78,8 +93,8 @@ func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selec
 	return nil
 }
 
-// Traversal is a allows writing a car with the data specified by a selector.
-type Traversal interface {
+// Writer is an interface allowing writing a car with the data specified by a selector.
+type Writer interface {
 	io.WriterTo
 }
 
@@ -102,33 +117,10 @@ func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
 		return int64(n) + h, err
 	}
 	h += int64(n)
+	v1s, err := tc.WriteV1(w)
+	h += int64(v1s)
 
-	// write the v1 header
-	c1h := carv1.CarHeader{Roots: []cid.Cid{tc.root}, Version: 1}
-	if err := carv1.WriteHeader(&c1h, w); err != nil {
-		return h, err
-	}
-	hn, err := carv1.HeaderSize(&c1h)
-	h += int64(hn)
-	if err != nil {
-		return h, err
-	}
-	v1Size := hn
-
-	// write the block.
-	wls, writer := teeingLinkSystem(*tc.ls, w)
-	err = traverse(tc.ctx, &wls, tc.root, tc.selector, tc.opts...)
-	h += int64(writer.size)
-	v1Size += writer.size
-	if err != nil {
-		return h, err
-	}
-	if tc.size != 0 && tc.size != v1Size {
-		return h, fmt.Errorf(ErrSizeMismatch)
-	}
-	tc.size = v1Size
-
-	return h, nil
+	return h, err
 }
 
 func (tc *traversalCar) WriteHeader(w io.Writer) (int64, error) {
@@ -136,6 +128,32 @@ func (tc *traversalCar) WriteHeader(w io.Writer) (int64, error) {
 	// TODO: support calculation / inclusion of the index.
 	h.IndexOffset = 0
 	return h.WriteTo(w)
+}
+
+func (tc *traversalCar) WriteV1(w io.Writer) (uint64, error) {
+	// write the v1 header
+	c1h := carv1.CarHeader{Roots: []cid.Cid{tc.root}, Version: 1}
+	if err := carv1.WriteHeader(&c1h, w); err != nil {
+		return 0, err
+	}
+	v1Size, err := carv1.HeaderSize(&c1h)
+	if err != nil {
+		return v1Size, err
+	}
+
+	// write the block.
+	opts := ApplyOptions(tc.opts...)
+	wls, writer := teeingLinkSystem(*tc.ls, w)
+	err = traverse(tc.ctx, &wls, tc.root, tc.selector, opts)
+	v1Size += writer.size
+	if err != nil {
+		return v1Size, err
+	}
+	if tc.size != 0 && tc.size != v1Size {
+		return v1Size, fmt.Errorf(ErrSizeMismatch)
+	}
+	tc.size = v1Size
+	return v1Size, nil
 }
 
 type counter struct {
@@ -181,7 +199,7 @@ func countingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, *counter) {
 	}, &c
 }
 
-func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Node, opts ...Option) error {
+func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Node, opts Options) error {
 	sel, err := selector.CompileSelector(s)
 	if err != nil {
 		return err
@@ -194,8 +212,14 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 			LinkTargetNodePrototypeChooser: func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
 				return basicnode.Prototype.Any, nil
 			},
-			LinkVisitOnlyOnce: true, // TODO: from opts,
+			LinkVisitOnlyOnce: !opts.BlockstoreAllowDuplicatePuts,
 		},
+	}
+	if opts.MaxTraversalLinks < math.MaxInt64 {
+		progress.Budget = &traversal.Budget{
+			NodeBudget: math.MaxInt64,
+			LinkBudget: int64(opts.MaxTraversalLinks),
+		}
 	}
 
 	lnk := cidlink.Link{Cid: root}
