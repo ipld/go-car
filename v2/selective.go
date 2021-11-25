@@ -1,7 +1,6 @@
 package car
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -9,19 +8,24 @@ import (
 	"os"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
+	"github.com/ipld/go-car/v2/internal/loader"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
-	"github.com/multiformats/go-varint"
 )
 
 // ErrSizeMismatch is returned when a written traversal realizes the written header size does not
 // match the actual number of car bytes written.
-const ErrSizeMismatch = "car-error-sizemismatch"
+var ErrSizeMismatch = fmt.Errorf("car-error-sizemismatch")
+
+// ErrOffsetImpossible is returned when specified paddings or offsets of either a wrapped carv1
+// or index cannot be satisfied based on the data being written.
+var ErrOffsetImpossible = fmt.Errorf("car-error-offsetimpossible")
 
 // MaxTraversalLinks changes the allowed number of links a selector traversal
 // can execute before failing.
@@ -37,7 +41,7 @@ func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 // PrepareTraversal walks through the proposed dag traversal to learn it's total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
 func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
-	cls, cntr := countingLinkSystem(*ls)
+	cls, cntr := loader.CountingLinkSystem(*ls)
 
 	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
 	headSize, err := carv1.HeaderSize(&c1h)
@@ -48,7 +52,7 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 		return nil, err
 	}
 	tc := traversalCar{
-		size:     headSize + cntr.totalRead,
+		size:     headSize + cntr.Size(),
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
@@ -58,7 +62,8 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 	return &tc, nil
 }
 
-// FileTraversal writes a carv2 matching a given root and selector to a file path.
+// FileTraversal writes a car file matching a given root and selector to the
+// path at `destination` using one read of each block.
 func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
 	tc := traversalCar{
 		size:     0,
@@ -86,11 +91,27 @@ func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selec
 	}
 
 	tc.size = uint64(tc.size)
-	if _, err = tc.WriteHeader(fp); err != nil {
+	if _, err = tc.WriteV2Header(fp); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// V1Traversal walks through the proposed dag traversal and writes a carv1 to the provided io.Writer
+func V1Traversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, writer io.Writer, opts ...Option) (uint64, error) {
+	opts = append(opts, WithoutIndex())
+	tc := traversalCar{
+		size:     0,
+		ctx:      ctx,
+		root:     root,
+		selector: selector,
+		ls:       ls,
+		opts:     opts,
+	}
+
+	len, _, err := tc.WriteV1(writer)
+	return len, err
 }
 
 // Writer is an interface allowing writing a car with the data specified by a selector.
@@ -108,95 +129,104 @@ type traversalCar struct {
 }
 
 func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
+	n, err := tc.WriteV2Header(w)
+	if err != nil {
+		return n, err
+	}
+	v1s, idx, err := tc.WriteV1(w)
+	n += int64(v1s)
+
+	if err != nil {
+		return n, err
+	}
+
+	// index padding, then index
+	opts := ApplyOptions(tc.opts...)
+	if opts.IndexCodec != index.CarIndexNoIndex {
+		if opts.IndexPadding > 0 {
+			buf := make([]byte, opts.IndexPadding)
+			pn, err := w.Write(buf)
+			n += int64(pn)
+			if err != nil {
+				return n, err
+			}
+		}
+		in, err := index.WriteTo(idx, w)
+		n += int64(in)
+		if err != nil {
+			return n, err
+		}
+	}
+
+	return n, err
+}
+
+func (tc *traversalCar) WriteV2Header(w io.Writer) (int64, error) {
 	n, err := w.Write(Pragma)
 	if err != nil {
 		return int64(n), err
 	}
-	h, err := tc.WriteHeader(w)
-	if err != nil {
-		return int64(n) + h, err
-	}
-	h += int64(n)
-	v1s, err := tc.WriteV1(w)
-	h += int64(v1s)
 
-	return h, err
-}
-
-func (tc *traversalCar) WriteHeader(w io.Writer) (int64, error) {
 	h := NewHeader(tc.size)
+	conf := ApplyOptions(tc.opts...)
+	if p := conf.DataPadding; p > 0 {
+		h = h.WithDataPadding(p)
+	}
+	if p := conf.IndexPadding; p > 0 {
+		h = h.WithIndexPadding(p)
+	}
 	// TODO: support calculation / inclusion of the index.
 	h.IndexOffset = 0
-	return h.WriteTo(w)
+	hn, err := h.WriteTo(w)
+	if err != nil {
+		return int64(n) + hn, err
+	}
+	hn += int64(n)
+
+	// We include the initial data padding after the carv2 header
+	if h.DataOffset > uint64(hn) {
+		buf := make([]byte, h.DataOffset-uint64(hn))
+		n, err = w.Write(buf)
+		hn += int64(n)
+		if err != nil {
+			return hn, err
+		}
+	} else if h.DataOffset < uint64(hn) {
+		return hn, ErrOffsetImpossible
+	}
+
+	return hn, nil
 }
 
-func (tc *traversalCar) WriteV1(w io.Writer) (uint64, error) {
+func (tc *traversalCar) WriteV1(w io.Writer) (uint64, index.Index, error) {
 	// write the v1 header
 	c1h := carv1.CarHeader{Roots: []cid.Cid{tc.root}, Version: 1}
 	if err := carv1.WriteHeader(&c1h, w); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	v1Size, err := carv1.HeaderSize(&c1h)
 	if err != nil {
-		return v1Size, err
+		return v1Size, nil, err
 	}
 
 	// write the block.
 	opts := ApplyOptions(tc.opts...)
-	wls, writer := teeingLinkSystem(*tc.ls, w)
+	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, opts.IndexCodec)
 	err = traverse(tc.ctx, &wls, tc.root, tc.selector, opts)
-	v1Size += writer.size
+	v1Size = writer.Size()
 	if err != nil {
-		return v1Size, err
+		return v1Size, nil, err
 	}
 	if tc.size != 0 && tc.size != v1Size {
-		return v1Size, fmt.Errorf(ErrSizeMismatch)
+		return v1Size, nil, ErrSizeMismatch
 	}
 	tc.size = v1Size
-	return v1Size, nil
-}
 
-type counter struct {
-	totalRead uint64
-}
-
-type countingReader struct {
-	r    io.Reader
-	c    *counter
-	read uint64
-	cid  string
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	if err == io.EOF {
-		// add in the overall length of the block.
-		n += len(c.cid)
-		uv := varint.ToUvarint(uint64(n))
-		n += len(uv)
+	if opts.IndexCodec == index.CarIndexNoIndex {
+		return v1Size, nil, nil
 	}
-	c.c.totalRead += uint64(n)
-	c.read += uint64(n)
-	return n, err
-}
-
-func countingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, *counter) {
-	c := counter{}
-	return linking.LinkSystem{
-		EncoderChooser:     ls.EncoderChooser,
-		DecoderChooser:     ls.DecoderChooser,
-		HasherChooser:      ls.HasherChooser,
-		StorageWriteOpener: ls.StorageWriteOpener,
-		StorageReadOpener: func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
-			r, err := ls.StorageReadOpener(lc, l)
-			if err != nil {
-				return nil, err
-			}
-			return &countingReader{r, &c, 0, l.Binary()}, nil
-		},
-		TrustedStorage: ls.TrustedStorage,
-		NodeReifier:    ls.NodeReifier,
-	}, &c
+	idx, err := writer.Index()
+	return v1Size, idx, err
 }
 
 func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Node, opts Options) error {
@@ -230,60 +260,4 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 	return progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, _ ipld.Node) error {
 		return nil
 	})
-}
-
-type writerOutput struct {
-	w    io.Writer
-	size uint64
-}
-
-type writingReader struct {
-	r   io.Reader
-	len int64
-	cid string
-	wo  *writerOutput
-}
-
-func (w *writingReader) Read(p []byte) (int, error) {
-	if w.wo != nil {
-		// write the cid
-		size := varint.ToUvarint(uint64(w.len))
-		if _, err := w.wo.w.Write(size); err != nil {
-			return 0, err
-		}
-		if _, err := w.wo.w.Write([]byte(w.cid)); err != nil {
-			return 0, err
-		}
-		cpy := bytes.NewBuffer(w.r.(*bytes.Buffer).Bytes())
-		if _, err := cpy.WriteTo(w.wo.w); err != nil {
-			return 0, err
-		}
-		w.wo = nil
-	}
-
-	return w.r.Read(p)
-}
-
-func teeingLinkSystem(ls ipld.LinkSystem, w io.Writer) (ipld.LinkSystem, *writerOutput) {
-	wo := writerOutput{w, 0}
-	return linking.LinkSystem{
-		EncoderChooser:     ls.EncoderChooser,
-		DecoderChooser:     ls.DecoderChooser,
-		HasherChooser:      ls.HasherChooser,
-		StorageWriteOpener: ls.StorageWriteOpener,
-		StorageReadOpener: func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
-			r, err := ls.StorageReadOpener(lc, l)
-			if err != nil {
-				return nil, err
-			}
-			buf := bytes.NewBuffer(nil)
-			n, err := buf.ReadFrom(r)
-			if err != nil {
-				return nil, err
-			}
-			return &writingReader{buf, n, l.Binary(), &wo}, nil
-		},
-		TrustedStorage: ls.TrustedStorage,
-		NodeReifier:    ls.NodeReifier,
-	}, &wo
 }
