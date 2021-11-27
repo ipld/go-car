@@ -42,26 +42,20 @@ func (c *countingReader) Read(p []byte) (int, error) {
 // CID and the varint length for the block data).
 func CountingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, ReadCounter) {
 	c := counter{}
-	return linking.LinkSystem{
-		EncoderChooser:     ls.EncoderChooser,
-		DecoderChooser:     ls.DecoderChooser,
-		HasherChooser:      ls.HasherChooser,
-		StorageWriteOpener: ls.StorageWriteOpener,
-		StorageReadOpener: func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
-			r, err := ls.StorageReadOpener(lc, l)
-			if err != nil {
-				return nil, err
-			}
-			buf := bytes.NewBuffer(nil)
-			n, err := buf.ReadFrom(r)
-			if err != nil {
-				return nil, err
-			}
-			size := varint.ToUvarint(uint64(n) + uint64(len(l.Binary())))
-			c.totalRead += uint64(len(size)) + uint64(len(l.Binary()))
-			return &countingReader{buf, &c}, nil
-		},
-		TrustedStorage: ls.TrustedStorage,
-		NodeReifier:    ls.NodeReifier,
-	}, &c
+	clc := ls
+	clc.StorageReadOpener = func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
+		r, err := ls.StorageReadOpener(lc, l)
+		if err != nil {
+			return nil, err
+		}
+		buf := bytes.NewBuffer(nil)
+		n, err := buf.ReadFrom(r)
+		if err != nil {
+			return nil, err
+		}
+		size := varint.ToUvarint(uint64(n) + uint64(len(l.Binary())))
+		c.totalRead += uint64(len(size)) + uint64(len(l.Binary()))
+		return &countingReader{buf, &c}, nil
+	}
+	return clc, &c
 }

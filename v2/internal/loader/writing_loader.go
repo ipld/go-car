@@ -96,24 +96,19 @@ func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, ind
 		code:  indexCodec,
 		rcrds: make([]index.Record, 0),
 	}
-	return linking.LinkSystem{
-		EncoderChooser:     ls.EncoderChooser,
-		DecoderChooser:     ls.DecoderChooser,
-		HasherChooser:      ls.HasherChooser,
-		StorageWriteOpener: ls.StorageWriteOpener,
-		StorageReadOpener: func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
-			r, err := ls.StorageReadOpener(lc, l)
-			if err != nil {
-				return nil, err
-			}
-			buf := bytes.NewBuffer(nil)
-			n, err := buf.ReadFrom(r)
-			if err != nil {
-				return nil, err
-			}
-			return &writingReader{buf, n, l.Binary(), &wo}, nil
-		},
-		TrustedStorage: ls.TrustedStorage,
-		NodeReifier:    ls.NodeReifier,
-	}, &wo
+
+	tls := ls
+	tls.StorageReadOpener = func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
+		r, err := ls.StorageReadOpener(lc, l)
+		if err != nil {
+			return nil, err
+		}
+		buf := bytes.NewBuffer(nil)
+		n, err := buf.ReadFrom(r)
+		if err != nil {
+			return nil, err
+		}
+		return &writingReader{buf, n, l.Binary(), &wo}, nil
+	}
+	return tls, &wo
 }
