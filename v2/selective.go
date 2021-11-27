@@ -253,11 +253,16 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 	}
 
 	lnk := cidlink.Link{Cid: root}
+	ls.TrustedStorage = true
 	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, basicnode.Prototype.Any)
 	if err != nil {
-		return err
+		return fmt.Errorf("root blk load failed: %s", err)
 	}
-	return progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, _ ipld.Node) error {
+	err = progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, _ ipld.Node) error {
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("walk failed: %s", err)
+	}
+	return nil
 }

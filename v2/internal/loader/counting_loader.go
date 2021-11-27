@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/ipld/go-ipld-prime"
@@ -24,22 +25,13 @@ type ReadCounter interface {
 }
 
 type countingReader struct {
-	r    io.Reader
-	c    *counter
-	read uint64
-	cid  string
+	r io.Reader
+	c *counter
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
-	if err == io.EOF {
-		// add in the overall length of the block.
-		n += len(c.cid)
-		uv := varint.ToUvarint(uint64(n))
-		n += len(uv)
-	}
 	c.c.totalRead += uint64(n)
-	c.read += uint64(n)
 	return n, err
 }
 
@@ -60,7 +52,14 @@ func CountingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, ReadCounter) {
 			if err != nil {
 				return nil, err
 			}
-			return &countingReader{r, &c, 0, l.Binary()}, nil
+			buf := bytes.NewBuffer(nil)
+			n, err := buf.ReadFrom(r)
+			if err != nil {
+				return nil, err
+			}
+			size := varint.ToUvarint(uint64(n) + uint64(len(l.Binary())))
+			c.totalRead += uint64(len(size)) + uint64(len(l.Binary()))
+			return &countingReader{buf, &c}, nil
 		},
 		TrustedStorage: ls.TrustedStorage,
 		NodeReifier:    ls.NodeReifier,

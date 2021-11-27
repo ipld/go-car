@@ -1,0 +1,64 @@
+package car_test
+
+import (
+	"bytes"
+	"context"
+	"io/ioutil"
+	"os"
+	"path"
+	"testing"
+
+	"github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car/v2/blockstore"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/storage/bsadapter"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
+	"github.com/stretchr/testify/require"
+
+	_ "github.com/ipld/go-codec-dagpb"
+	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
+	_ "github.com/ipld/go-ipld-prime/codec/raw"
+)
+
+func TestPrepareTraversal(t *testing.T) {
+	from, err := blockstore.OpenReadOnly("testdata/sample-unixfs-v2.car")
+	require.NoError(t, err)
+	ls := cidlink.DefaultLinkSystem()
+	bsa := bsadapter.Adapter{Wrapped: from}
+	ls.SetReadStorage(&bsa)
+
+	rts, _ := from.Roots()
+	writer, err := car.PrepareTraversal(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively)
+	require.NoError(t, err)
+
+	buf := bytes.Buffer{}
+	n, err := writer.WriteTo(&buf)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(buf.Bytes())), n)
+
+	fi, _ := os.Stat("testdata/sample-unixfs-v2.car")
+	require.Equal(t, fi.Size(), n)
+}
+
+func TestFileTraversal(t *testing.T) {
+	from, err := blockstore.OpenReadOnly("testdata/sample-unixfs-v2.car")
+	require.NoError(t, err)
+	ls := cidlink.DefaultLinkSystem()
+	bsa := bsadapter.Adapter{Wrapped: from}
+	ls.SetReadStorage(&bsa)
+
+	rts, _ := from.Roots()
+	outDir, err := ioutil.TempDir("", "car-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(outDir)
+	err = car.FileTraversal(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively, path.Join(outDir, "out.car"))
+	require.NoError(t, err)
+
+	require.FileExists(t, path.Join(outDir, "out.car"))
+
+	fa, _ := os.Stat("testdata/sample-unixfs-v2.car")
+	fb, _ := os.Stat(path.Join(outDir, "out.car"))
+	require.Equal(t, fa.Size(), fb.Size())
+}
