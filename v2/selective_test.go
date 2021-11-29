@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path"
-	"path/filepath"
 	"testing"
 
 	"github.com/ipld/go-car/v2"
@@ -48,7 +47,7 @@ func TestFileTraversal(t *testing.T) {
 	ls.SetReadStorage(&bsa)
 
 	rts, _ := from.Roots()
-	outDir := filepath.Join(t.TempDir(), "car-file-traversal.car")
+	outDir := t.TempDir()
 	err = car.TraverseToFile(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively, path.Join(outDir, "out.car"))
 	require.NoError(t, err)
 
