@@ -3,9 +3,9 @@ package car_test
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/ipld/go-car/v2"
@@ -28,7 +28,7 @@ func TestPrepareTraversal(t *testing.T) {
 	ls.SetReadStorage(&bsa)
 
 	rts, _ := from.Roots()
-	writer, err := car.PrepareTraversal(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively)
+	writer, err := car.NewSelectiveWriter(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively)
 	require.NoError(t, err)
 
 	buf := bytes.Buffer{}
@@ -48,12 +48,8 @@ func TestFileTraversal(t *testing.T) {
 	ls.SetReadStorage(&bsa)
 
 	rts, _ := from.Roots()
-	outDir, err := ioutil.TempDir("", "car-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(outDir)
-	err = car.FileTraversal(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively, path.Join(outDir, "out.car"))
+	outDir := filepath.Join(t.TempDir(), "car-file-traversal.car")
+	err = car.TraverseToFile(context.Background(), &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively, path.Join(outDir, "out.car"))
 	require.NoError(t, err)
 
 	require.FileExists(t, path.Join(outDir, "out.car"))

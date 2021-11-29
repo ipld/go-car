@@ -65,7 +65,7 @@ func (w *writingReader) Read(p []byte) (int, error) {
 		}
 
 		// maybe write the index.
-		if w.wo.code != index.CarIndexNoIndex {
+		if w.wo.code != index.CarIndexNone {
 			_, c, err := cid.CidFromBytes([]byte(w.cid))
 			if err != nil {
 				return 0, err

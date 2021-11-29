@@ -38,9 +38,9 @@ func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 	}
 }
 
-// PrepareTraversal walks through the proposed dag traversal to learn it's total size in order to be able to
+// NewSelectiveWriter walks through the proposed dag traversal to learn its total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
-func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
+func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
 	cls, cntr := loader.CountingLinkSystem(*ls)
 
 	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
@@ -57,21 +57,21 @@ func PrepareTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, se
 		root:     root,
 		selector: selector,
 		ls:       ls,
-		opts:     opts,
+		opts:     ApplyOptions(opts...),
 	}
 	return &tc, nil
 }
 
-// FileTraversal writes a car file matching a given root and selector to the
+// TraverseToFile writes a car file matching a given root and selector to the
 // path at `destination` using one read of each block.
-func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
+func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
 	tc := traversalCar{
 		size:     0,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
 		ls:       ls,
-		opts:     opts,
+		opts:     ApplyOptions(opts...),
 	}
 
 	fp, err := os.Create(destination)
@@ -98,8 +98,8 @@ func FileTraversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selec
 	return nil
 }
 
-// V1Traversal walks through the proposed dag traversal and writes a carv1 to the provided io.Writer
-func V1Traversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, writer io.Writer, opts ...Option) (uint64, error) {
+// TraverseV1 walks through the proposed dag traversal and writes a carv1 to the provided io.Writer
+func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, writer io.Writer, opts ...Option) (uint64, error) {
 	opts = append(opts, WithoutIndex())
 	tc := traversalCar{
 		size:     0,
@@ -107,17 +107,19 @@ func V1Traversal(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selecto
 		root:     root,
 		selector: selector,
 		ls:       ls,
-		opts:     opts,
+		opts:     ApplyOptions(opts...),
 	}
 
 	len, _, err := tc.WriteV1(writer)
 	return len, err
 }
 
-// Writer is an interface allowing writing a car with the data specified by a selector.
+// Writer is an interface allowing writing a car prepared by PrepareTraversal
 type Writer interface {
 	io.WriterTo
 }
+
+var _ Writer = (*traversalCar)(nil)
 
 type traversalCar struct {
 	size     uint64
@@ -125,7 +127,7 @@ type traversalCar struct {
 	root     cid.Cid
 	selector ipld.Node
 	ls       *ipld.LinkSystem
-	opts     []Option
+	opts     Options
 }
 
 func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
@@ -141,10 +143,9 @@ func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// index padding, then index
-	opts := ApplyOptions(tc.opts...)
-	if opts.IndexCodec != index.CarIndexNoIndex {
-		if opts.IndexPadding > 0 {
-			buf := make([]byte, opts.IndexPadding)
+	if tc.opts.IndexCodec != index.CarIndexNone {
+		if tc.opts.IndexPadding > 0 {
+			buf := make([]byte, tc.opts.IndexPadding)
 			pn, err := w.Write(buf)
 			n += int64(pn)
 			if err != nil {
@@ -168,15 +169,15 @@ func (tc *traversalCar) WriteV2Header(w io.Writer) (int64, error) {
 	}
 
 	h := NewHeader(tc.size)
-	conf := ApplyOptions(tc.opts...)
-	if p := conf.DataPadding; p > 0 {
+	if p := tc.opts.DataPadding; p > 0 {
 		h = h.WithDataPadding(p)
 	}
-	if p := conf.IndexPadding; p > 0 {
+	if p := tc.opts.IndexPadding; p > 0 {
 		h = h.WithIndexPadding(p)
 	}
-	// TODO: support calculation / inclusion of the index.
-	h.IndexOffset = 0
+	if tc.opts.IndexCodec == index.CarIndexNone {
+		h.IndexOffset = 0
+	}
 	hn, err := h.WriteTo(w)
 	if err != nil {
 		return int64(n) + hn, err
@@ -185,6 +186,7 @@ func (tc *traversalCar) WriteV2Header(w io.Writer) (int64, error) {
 
 	// We include the initial data padding after the carv2 header
 	if h.DataOffset > uint64(hn) {
+		// TODO: buffer writes if this needs to be big.
 		buf := make([]byte, h.DataOffset-uint64(hn))
 		n, err = w.Write(buf)
 		hn += int64(n)
@@ -210,9 +212,8 @@ func (tc *traversalCar) WriteV1(w io.Writer) (uint64, index.Index, error) {
 	}
 
 	// write the block.
-	opts := ApplyOptions(tc.opts...)
-	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, opts.IndexCodec)
-	err = traverse(tc.ctx, &wls, tc.root, tc.selector, opts)
+	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, tc.opts.IndexCodec)
+	err = traverse(tc.ctx, &wls, tc.root, tc.selector, tc.opts)
 	v1Size = writer.Size()
 	if err != nil {
 		return v1Size, nil, err
@@ -222,7 +223,7 @@ func (tc *traversalCar) WriteV1(w io.Writer) (uint64, index.Index, error) {
 	}
 	tc.size = v1Size
 
-	if opts.IndexCodec == index.CarIndexNoIndex {
+	if tc.opts.IndexCodec == index.CarIndexNone {
 		return v1Size, nil, nil
 	}
 	idx, err := writer.Index()

@@ -15,8 +15,8 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-// CarIndexNoIndex is a sentinal value used as a multicodec code for the index indicating no index.
-const CarIndexNoIndex = 0x300000
+// CarIndexNone is a sentinal value used as a multicodec code for the index indicating no index.
+const CarIndexNone = 0x300000
 
 type (
 	// Record is a pre-processed record of a car item and location.

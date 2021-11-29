@@ -94,7 +94,7 @@ func UseIndexCodec(c multicodec.Code) Option {
 // WithoutIndex flags that no index should be included in generation.
 func WithoutIndex() Option {
 	return func(o *Options) {
-		o.IndexCodec = index.CarIndexNoIndex
+		o.IndexCodec = index.CarIndexNone
 	}
 }
 
