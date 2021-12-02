@@ -62,7 +62,7 @@ func ExampleWrapV1File() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(bs.Get(context.Background(), roots[0]))
+	fmt.Println(bs.Get(context.TODO(), roots[0]))
 
 	// Output:
 	// Roots: [bafy2bzaced4ueelaegfs5fqu4tzsh6ywbbpfk3cxppupmxfdhbpbhzawfw5oy]

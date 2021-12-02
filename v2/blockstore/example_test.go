@@ -42,7 +42,7 @@ func ExampleOpenReadOnly() {
 		fmt.Printf("\t%v\n", r)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
 	// Print the raw data size for the first 5 CIDs in the CAR file.
