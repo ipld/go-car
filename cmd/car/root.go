@@ -5,29 +5,20 @@ import (
 	"os"
 
 	carv2 "github.com/ipld/go-car/v2"
-	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/urfave/cli/v2"
 )
 
 // CarRoot prints the root CID in a car
 func CarRoot(c *cli.Context) (err error) {
+	inStream := os.Stdin
 	if c.Args().Len() >= 1 {
-		bs, err := blockstore.OpenReadOnly(c.Args().First())
+		inStream, err = os.Open(c.Args().First())
 		if err != nil {
 			return err
 		}
-		roots, err := bs.Roots()
-		if err != nil {
-			return err
-		}
-
-		for _, r := range roots {
-			fmt.Printf("%s\n", r.String())
-		}
-		return nil
 	}
 
-	rd, err := carv2.NewBlockReader(os.Stdin)
+	rd, err := carv2.NewBlockReader(inStream)
 	if err != nil {
 		return err
 	}
