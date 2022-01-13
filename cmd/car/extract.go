@@ -20,6 +20,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var ErrNotDir = fmt.Errorf("not a directory")
+
 // ExtractCar pulls files and directories out of a car
 func ExtractCar(c *cli.Context) error {
 	outputDir, err := os.Getwd()
@@ -92,6 +94,26 @@ func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir st
 		}
 	}
 	if err := extractDir(c, ls, ufn, outputResolvedDir, "/"); err != nil {
+		if err == ErrNotDir {
+			ufsData, err := pbnode.LookupByString("Data")
+			if err != nil {
+				return err
+			}
+			ufsBytes, err := ufsData.AsBytes()
+			if err != nil {
+				return err
+			}
+			ufsNode, err := data.DecodeUnixFSData(ufsBytes)
+			if err != nil {
+				return err
+			}
+			if ufsNode.DataType.Int() == data.Data_File || ufsNode.DataType.Int() == data.Data_Raw {
+				if err := extractFile(c, ls, pbnode, path.Join(outputResolvedDir, "unknown")); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		return fmt.Errorf("%s: %w", root, err)
 	}
 
@@ -208,7 +230,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 		}
 		return nil
 	}
-	return fmt.Errorf("not a directory")
+	return ErrNotDir
 }
 
 func extractFile(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputName string) error {
