@@ -4,7 +4,7 @@ cmp stdout v1root.txt
 car root ${INPUTS}/sample-wrapped-v2.car
 cmp stdout v2root.txt
 
-stop stdin test needs car fix
+stop stdin_test_needs_car_fix
 stdin ${INPUTS}/sample-wrapped-v2.car
 car root
 cmp stdout v2root.txt
