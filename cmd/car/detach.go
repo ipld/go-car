@@ -65,5 +65,5 @@ func DetachCarList(c *cli.Context) error {
 		return nil
 	}
 
-	return fmt.Errorf("index of codec %d is not iterable", idx.Codec())
+	return fmt.Errorf("index of codec %s is not iterable", idx.Codec())
 }
