@@ -59,7 +59,7 @@ func TestBlockstoreX(t *testing.T) {
 		expectedV1StartOffset int64
 	}{
 		// no options, expect a standard CARv2 with the noidentity inner CARv1
-		{"noopt carv2", []carv2.Option{}, int64(carv2.PragmaSize + carv2.HeaderSize)},
+		{"noopt_carv2", []carv2.Option{}, int64(carv2.PragmaSize + carv2.HeaderSize)},
 		// option to only write as a CARv1, expect the noidentity inner CARv1
 		{"carv1", []carv2.Option{blockstore.WriteAsCarV1(true)}, int64(0)},
 	}
@@ -75,7 +75,7 @@ func TestBlockstoreX(t *testing.T) {
 			r, err := carv1.NewCarReader(f)
 			require.NoError(t, err)
 
-			path := filepath.Join(t.TempDir(), "readwrite.car")
+			path := filepath.Join(t.TempDir(), fmt.Sprintf("readwrite_%s.car", variant.name))
 			ingester, err := blockstore.OpenReadWrite(path, r.Header.Roots, variant.options...)
 			require.NoError(t, err)
 			t.Cleanup(func() { ingester.Finalize() })

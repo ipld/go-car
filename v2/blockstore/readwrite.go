@@ -176,7 +176,10 @@ func (b *ReadWrite) resumeWithRoots(v2 bool, roots []cid.Cid) error {
 		// Or the write must have failed before pragma was written.
 		return err
 	}
-	if !((version == 1 && !v2) || (version == 2 && v2)) {
+	switch {
+	case version == 1 && !v2:
+	case version == 2 && v2:
+	default:
 		// The file is not the expected version and we cannot resume from it.
 		return fmt.Errorf("cannot resume on CAR file with version %v", version)
 	}
@@ -379,7 +382,9 @@ func (b *ReadWrite) Discard() {
 // After this call, the blockstore can no longer be used.
 func (b *ReadWrite) Finalize() error {
 	if b.opts.WriteAsCarV1 {
-		b.Discard()
+		// all blocks are already properly written to the CARv1 inner container and there's
+		// no additional finalization required at the end of the file for a complete v1
+		b.ronly.Close()
 		return nil
 	}
 
