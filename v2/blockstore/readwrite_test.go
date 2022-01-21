@@ -144,6 +144,7 @@ func TestBlockstoreX(t *testing.T) {
 
 			wrote, err := os.Open(path)
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, wrote.Close()) })
 			_, err = wrote.Seek(variant.expectedV1StartOffset, io.SeekStart)
 			require.NoError(t, err)
 			hasher := sha512.New()
@@ -154,6 +155,7 @@ func TestBlockstoreX(t *testing.T) {
 			hasher.Reset()
 			originalCarV1, err := os.Open(originalCARv1ComparePath)
 			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, originalCarV1.Close()) })
 			wantWritten, err := io.Copy(hasher, originalCarV1)
 			require.NoError(t, err)
 			wantSum := hasher.Sum(nil)
