@@ -13,10 +13,11 @@ import (
 )
 
 type writerOutput struct {
-	w     io.Writer
-	size  uint64
-	code  multicodec.Code
-	rcrds []index.Record
+	w      io.Writer
+	size   uint64
+	toSkip uint64
+	code   multicodec.Code
+	rcrds  []index.Record
 }
 
 func (w *writerOutput) Size() uint64 {
@@ -50,17 +51,31 @@ type writingReader struct {
 }
 
 func (w *writingReader) Read(p []byte) (int, error) {
+	buf := bytes.NewBuffer(nil)
 	if w.wo != nil {
 		// write the cid
 		size := varint.ToUvarint(uint64(w.len) + uint64(len(w.cid)))
-		if _, err := w.wo.w.Write(size); err != nil {
+		if _, err := buf.Write(size); err != nil {
 			return 0, err
 		}
-		if _, err := w.wo.w.Write([]byte(w.cid)); err != nil {
+		if _, err := buf.Write([]byte(w.cid)); err != nil {
 			return 0, err
 		}
 		cpy := bytes.NewBuffer(w.r.(*bytes.Buffer).Bytes())
-		if _, err := cpy.WriteTo(w.wo.w); err != nil {
+		if _, err := cpy.WriteTo(buf); err != nil {
+			return 0, err
+		}
+		out := buf.Bytes()
+		if w.wo.toSkip > 0 {
+			if w.wo.toSkip >= uint64(len(out)) {
+				w.wo.toSkip -= uint64(len(out))
+				out = []byte{}
+			} else {
+				out = out[w.wo.toSkip:]
+				w.wo.toSkip = 0
+			}
+		}
+		if _, err := bytes.NewBuffer(out).WriteTo(w.wo.w); err != nil {
 			return 0, err
 		}
 
@@ -89,12 +104,13 @@ func (w *writingReader) Read(p []byte) (int, error) {
 // The `initialOffset` is used to calculate the offsets recorded for the index, and will be
 //   included in the `.Size()` of the IndexTracker.
 // An indexCodec of `index.CarIndexNoIndex` can be used to not track these offsets.
-func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, indexCodec multicodec.Code) (ipld.LinkSystem, IndexTracker) {
+func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, skip uint64, indexCodec multicodec.Code) (ipld.LinkSystem, IndexTracker) {
 	wo := writerOutput{
-		w:     w,
-		size:  initialOffset,
-		code:  indexCodec,
-		rcrds: make([]index.Record, 0),
+		w:      w,
+		size:   initialOffset,
+		toSkip: skip,
+		code:   indexCodec,
+		rcrds:  make([]index.Record, 0),
 	}
 
 	tls := ls
