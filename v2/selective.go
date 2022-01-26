@@ -1,6 +1,7 @@
 package car
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -112,7 +113,7 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 		opts:     ApplyOptions(opts...),
 	}
 
-	len, _, err := tc.WriteV1(writer)
+	len, _, err := tc.WriteV1(0, writer)
 	return len, err
 }
 
@@ -137,7 +138,7 @@ func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return n, err
 	}
-	v1s, idx, err := tc.WriteV1(w)
+	v1s, idx, err := tc.WriteV1(0, w)
 	n += int64(v1s)
 
 	if err != nil {
@@ -202,21 +203,35 @@ func (tc *traversalCar) WriteV2Header(w io.Writer) (int64, error) {
 	return hn, nil
 }
 
-func (tc *traversalCar) WriteV1(w io.Writer) (uint64, index.Index, error) {
+// WriteV1 writes a v1 car to the writer, w, except for the first `skip` bytes.
+// Returns bytes written, an index of what was written, or error if one occured.
+func (tc *traversalCar) WriteV1(skip uint64, w io.Writer) (uint64, index.Index, error) {
+	written := uint64(0)
+
 	// write the v1 header
 	c1h := carv1.CarHeader{Roots: []cid.Cid{tc.root}, Version: 1}
-	if err := carv1.WriteHeader(&c1h, w); err != nil {
-		return 0, nil, err
-	}
 	v1Size, err := carv1.HeaderSize(&c1h)
 	if err != nil {
-		return v1Size, nil, err
+		return 0, nil, err
+	}
+	if skip < v1Size {
+		buf := bytes.NewBuffer(nil)
+		if err := carv1.WriteHeader(&c1h, buf); err != nil {
+			return 0, nil, err
+		}
+		if _, err := w.Write(buf.Bytes()[skip:]); err != nil {
+			return 0, nil, err
+		}
+		written = v1Size - skip
+		skip = 0
+	} else {
+		skip -= v1Size
 	}
 
 	// write the block.
-	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, tc.opts.IndexCodec)
+	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, skip, tc.opts.IndexCodec)
 	err = traverse(tc.ctx, &wls, tc.root, tc.selector, tc.opts)
-	v1Size = writer.Size()
+	v1Size = writer.Size() - v1Size + written
 	if err != nil {
 		return v1Size, nil, err
 	}
