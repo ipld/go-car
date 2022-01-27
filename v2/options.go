@@ -60,6 +60,7 @@ type Options struct {
 	MaxTraversalLinks            uint64
 	WriteAsCarV1                 bool
 	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
+	V1Size                       uint64
 
 	MaxAllowedHeaderSize  uint64
 	MaxAllowedSectionSize uint64
