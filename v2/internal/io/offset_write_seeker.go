@@ -1,6 +1,11 @@
 package io
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+var ErrUnsupported = errors.New("unsupported seek operation")
 
 var (
 	_ io.Writer      = (*OffsetWriteSeeker)(nil)
@@ -30,7 +35,7 @@ func (ow *OffsetWriteSeeker) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekCurrent:
 		ow.offset += offset
 	case io.SeekEnd:
-		panic("unsupported whence: SeekEnd")
+		return 0, ErrUnsupported
 	}
 	return ow.Position(), nil
 }

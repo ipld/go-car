@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
+	ioint "github.com/ipld/go-car/v2/internal/io"
 	"github.com/ipld/go-car/v2/internal/loader"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/linking"
@@ -39,9 +40,28 @@ func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 	}
 }
 
+// WithV1Size sets the expected v1 size of the car being written if it is known in advance.
+func WithV1Size(size uint64) Option {
+	return func(sco *Options) {
+		sco.V1Size = size
+	}
+}
+
 // NewSelectiveWriter walks through the proposed dag traversal to learn its total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
 func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
+	conf := ApplyOptions(opts...)
+	if conf.V1Size != 0 {
+		return &traversalCar{
+			size:     conf.V1Size,
+			ctx:      ctx,
+			root:     root,
+			selector: selector,
+			ls:       ls,
+			opts:     ApplyOptions(opts...),
+		}, nil
+	}
+
 	cls, cntr := loader.CountingLinkSystem(*ls)
 
 	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
@@ -49,7 +69,7 @@ func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, 
 	if err != nil {
 		return nil, err
 	}
-	if err := traverse(ctx, &cls, root, selector, ApplyOptions(opts...)); err != nil {
+	if err := traverse(ctx, &cls, root, selector, conf); err != nil {
 		return nil, err
 	}
 	tc := traversalCar{
@@ -66,13 +86,14 @@ func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, 
 // TraverseToFile writes a car file matching a given root and selector to the
 // path at `destination` using one read of each block.
 func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
+	conf := ApplyOptions(opts...)
 	tc := traversalCar{
-		size:     0,
+		size:     conf.V1Size,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
 		ls:       ls,
-		opts:     ApplyOptions(opts...),
+		opts:     conf,
 	}
 
 	fp, err := os.Create(destination)
@@ -102,17 +123,38 @@ func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, sele
 // TraverseV1 walks through the proposed dag traversal and writes a carv1 to the provided io.Writer
 func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, writer io.Writer, opts ...Option) (uint64, error) {
 	opts = append(opts, WithoutIndex())
+	conf := ApplyOptions(opts...)
 	tc := traversalCar{
-		size:     0,
+		size:     conf.V1Size,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
 		ls:       ls,
-		opts:     ApplyOptions(opts...),
+		opts:     conf,
 	}
 
-	len, _, err := tc.WriteV1(0, writer)
+	len, _, err := tc.WriteV1(tc.ctx, 0, writer)
 	return len, err
+}
+
+// CreateV1Reader creates an io.ReadSeeker that can be used to copy out the carv1 contents of a car.
+func CreateV1Reader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
+	opts = append(opts, WithoutIndex())
+	conf := ApplyOptions(opts...)
+	tc := traversalCar{
+		size:     conf.V1Size,
+		ctx:      ctx,
+		root:     root,
+		selector: selector,
+		ls:       ls,
+		opts:     conf,
+	}
+	rwf := func(ctx context.Context, offset uint64, writer io.Writer) (uint64, error) {
+		s, _, err := tc.WriteV1(ctx, offset, writer)
+		return s, err
+	}
+	rw := ioint.NewSkipWriterReaderSeeker(ctx, conf.V1Size, rwf)
+	return rw, nil
 }
 
 // Writer is an interface allowing writing a car prepared by PrepareTraversal
@@ -136,7 +178,7 @@ func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return n, err
 	}
-	v1s, idx, err := tc.WriteV1(0, w)
+	v1s, idx, err := tc.WriteV1(tc.ctx, 0, w)
 	n += int64(v1s)
 
 	if err != nil {
@@ -203,7 +245,7 @@ func (tc *traversalCar) WriteV2Header(w io.Writer) (int64, error) {
 
 // WriteV1 writes a v1 car to the writer, w, except for the first `skip` bytes.
 // Returns bytes written, an index of what was written, or error if one occured.
-func (tc *traversalCar) WriteV1(skip uint64, w io.Writer) (uint64, index.Index, error) {
+func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (uint64, index.Index, error) {
 	written := uint64(0)
 
 	// write the v1 header
@@ -228,7 +270,7 @@ func (tc *traversalCar) WriteV1(skip uint64, w io.Writer) (uint64, index.Index, 
 
 	// write the block.
 	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, skip, tc.opts.IndexCodec)
-	err = traverse(tc.ctx, &wls, tc.root, tc.selector, tc.opts)
+	err = traverse(ctx, &wls, tc.root, tc.selector, tc.opts)
 	v1Size = writer.Size() - v1Size + written
 	if err != nil {
 		return v1Size, nil, err
@@ -270,7 +312,7 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 
 	lnk := cidlink.Link{Cid: root}
 	ls.TrustedStorage = true
-	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, basicnode.Prototype.Any)
+	rootNode, err := ls.Load(ipld.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any)
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
