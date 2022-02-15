@@ -108,7 +108,7 @@ func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir st
 				return err
 			}
 			if ufsNode.DataType.Int() == data.Data_File || ufsNode.DataType.Int() == data.Data_Raw {
-				if err := extractFile(c, ls, pbnode, path.Join(outputResolvedDir, "unknown")); err != nil {
+				if err := extractFile(c, ls, pbnode, filepath.Join(outputResolvedDir, "unknown")); err != nil {
 					return err
 				}
 			}
