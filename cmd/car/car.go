@@ -35,6 +35,19 @@ func main1() int {
 				},
 			},
 			{
+				Name:    "convert",
+				Usage:   "Convert a car file to given codec",
+				Aliases: []string{"con"},
+				Action:  ConvertCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "selector",
+						Aliases: []string{"s"},
+						Usage:   "A selector over the dag",
+					},
+				},
+			},
+			{
 				Name:   "detach-index",
 				Usage:  "Detach an index to a detached file",
 				Action: DetachCar,
