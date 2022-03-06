@@ -29,8 +29,8 @@ func main1() int {
 				},
 			},
 			{
-				Name:    "concatinate",
-				Usage:   "Concatinate car files",
+				Name:    "concatenate",
+				Usage:   "Concatenate car files",
 				Aliases: []string{"cat"},
 				Action:  CatCar,
 				Flags: []cli.Flag{

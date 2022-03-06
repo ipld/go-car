@@ -11,7 +11,7 @@ car list out-2.car
 ! stderr .
 cmp stdout filteredcids.txt
 
-car concatinate -f combined.car out.car out-2.car
+car concatenate -f combined.car out.car out-2.car
 ! stderr .
 car list combined.car
 stdout -count=3 '^bafy'

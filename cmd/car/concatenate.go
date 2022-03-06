@@ -10,7 +10,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// CatCar will concatinate the blocks from a set of source car files together into a
+// CatCar will concatenate the blocks from a set of source car files together into a
 // combined destination car file.
 // The root of the destination car will be the roots of the last specified source car.
 func CatCar(c *cli.Context) error {
