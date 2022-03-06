@@ -16,10 +16,23 @@ func main1() int {
 		Usage: "Utility for working with car files",
 		Commands: []*cli.Command{
 			{
-				Name:    "create",
-				Usage:   "Create a car file",
-				Aliases: []string{"c"},
-				Action:  CreateCar,
+				Name:    "convert",
+				Usage:   "Convert a car file to given codec",
+				Aliases: []string{"con"},
+				Action:  ConvertCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "selector",
+						Aliases: []string{"s"},
+						Usage:   "A selector over the dag",
+					},
+				},
+			},
+			{
+				Name:    "concatinate",
+				Usage:   "Concatinate car files",
+				Aliases: []string{"cat"},
+				Action:  CatCar,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:      "file",
@@ -35,15 +48,21 @@ func main1() int {
 				},
 			},
 			{
-				Name:    "convert",
-				Usage:   "Convert a car file to given codec",
-				Aliases: []string{"con"},
-				Action:  ConvertCar,
+				Name:    "create",
+				Usage:   "Create a car file",
+				Aliases: []string{"c"},
+				Action:  CreateCar,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "selector",
-						Aliases: []string{"s"},
-						Usage:   "A selector over the dag",
+						Name:      "file",
+						Aliases:   []string{"f", "output", "o"},
+						Usage:     "The car file to write to",
+						TakesFile: true,
+					},
+					&cli.IntFlag{
+						Name:  "version",
+						Value: 2,
+						Usage: "Write output as a v1 or v2 format car",
 					},
 				},
 			},
@@ -123,6 +142,19 @@ func main1() int {
 				},
 			},
 			{
+				Name:   "import",
+				Usage:  "Import a block into a car file",
+				Action: ImportCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "codec",
+						Aliases: []string{"c"},
+						Usage:   "The codec the block data should be interpreted with",
+						Value:   multicodec.DagJson.String(),
+					},
+				},
+			},
+			{
 				Name:    "index",
 				Aliases: []string{"i"},
 				Usage:   "write out the car with an index",
@@ -143,7 +175,7 @@ func main1() int {
 			},
 			{
 				Name:    "list",
-				Aliases: []string{"l"},
+				Aliases: []string{"l", "ls"},
 				Usage:   "List the CIDs in a car",
 				Action:  ListCar,
 				Flags: []cli.Flag{

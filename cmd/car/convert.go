@@ -20,6 +20,7 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	selectorParser "github.com/ipld/go-ipld-prime/traversal/selector/parse"
+	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/urfave/cli/v2"
 )
@@ -48,8 +49,8 @@ func proxyCid(proto cidlink.LinkPrototype) (cid.Cid, error) {
 
 // ConvertCar will will re-write the blocks in a car to a specified codec.
 func ConvertCar(c *cli.Context) error {
-	if c.Args().Len() < 3 {
-		return fmt.Errorf("Usage: convert <source> <destination> <codec>")
+	if c.Args().Len() < 2 {
+		return fmt.Errorf("Usage: convert <source> <destination> [codec]")
 	}
 
 	output := c.Args().Get(1)
@@ -59,8 +60,18 @@ func ConvertCar(c *cli.Context) error {
 	}
 	_ = os.Remove(output)
 
+	convertTo := multicodec.DagJson
+	codec := ""
+	if c.Args().Len() > 2 {
+		codec = c.Args().Get(2)
+	}
+	for _, candidate := range multicodec.KnownCodes() {
+		if candidate.String() == codec {
+			convertTo = candidate
+		}
+	}
 	proto := cidlink.LinkPrototype{
-		Prefix: cid.NewPrefixV1(cid.DagCBOR, multihash.SHA2_256),
+		Prefix: cid.NewPrefixV1(uint64(convertTo), multihash.SHA2_256),
 	}
 	p, err := proxyCid(proto)
 	if err != nil {
@@ -171,7 +182,8 @@ func ConvertCar(c *cli.Context) error {
 			}
 			return nil
 		})
-		workMap[blkCid] = &children{t: 0, old: old, new: make([]cid.Cid, len(old))}
+		child := children{t: 0, done: false, old: old, new: make([]cid.Cid, len(old))}
+		workMap[blkCid] = &child
 	}
 
 	// Step 3: for nodes with no-uncoverted children, transform the node, and convert.
@@ -180,27 +192,37 @@ func ConvertCar(c *cli.Context) error {
 	for done < len(workMap) {
 		for c := range workMap {
 			if workMap[c].t == len(workMap[c].old) && !workMap[c].done {
-				// Step 3.1: transform the node using old->new map
+				v := workMap[c]
+				var newRoot ipld.Node
 				lnk := cidlink.Link{Cid: c}
 				ns, _ = nsc(lnk, ipld.LinkContext{})
 				oldRoot, err := ls.Load(ipld.LinkContext{}, lnk, ns)
 				if err != nil {
 					return err
 				}
-				newRoot, err := traversal.WalkTransforming(oldRoot, xar, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
-					if n.Kind() == datamodel.Kind_Link {
-						nlk, _ := n.AsLink()
-						oldCid := nlk.(cidlink.Link).Cid
-						for i, c := range workMap[c].old {
-							if c.Equals(oldCid) {
-								newLk := basicnode.NewLink(cidlink.Link{Cid: workMap[c].new[i]})
-								return newLk, nil
+				if len(v.old) == 0 {
+					// shortcut on leaf nodes.
+					newRoot = oldRoot
+				} else {
+					// Step 3.1: transform the node using old->new map
+					newRoot, err = traversal.WalkTransforming(oldRoot, xar, func(p traversal.Progress, n datamodel.Node) (datamodel.Node, error) {
+						if n.Kind() == datamodel.Kind_Link {
+							nlk, _ := n.AsLink()
+							oldCid := nlk.(cidlink.Link).Cid
+							for i, c := range v.old {
+								if c.Equals(oldCid) {
+									newLk := basicnode.NewLink(cidlink.Link{Cid: v.new[i]})
+									return newLk, nil
+								}
 							}
+							return nil, fmt.Errorf("could not find link %s in workmap: %v", oldCid, v.old)
 						}
-						return nil, fmt.Errorf("could not find link %s in workmap", oldCid)
+						return n, nil
+					})
+					if err != nil {
+						return err
 					}
-					return n, nil
-				})
+				}
 				// Step 3.2: serialize into output datastore
 				newLnk, err := outls.Store(ipld.LinkContext{}, proto, newRoot)
 				if err != nil {
@@ -211,9 +233,9 @@ func ConvertCar(c *cli.Context) error {
 				// Step 3.3: update workmap indicating parents should transform this child.
 				for d := range workMap {
 					for i, o := range workMap[d].old {
-						if o == newCid {
-							workMap[d].new[i] = newCid
-							workMap[d].t++
+						if o.Equals(c) {
+							(*workMap[d]).new[i] = newCid
+							(*workMap[d]).t++
 						}
 					}
 				}

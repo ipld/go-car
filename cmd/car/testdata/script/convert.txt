@@ -1,0 +1,4 @@
+car convert ${INPUTS}/sample-wrapped-v2.car out.car dagjson
+! stderr .
+car list out.car
+stdout -count=1049 '^baguq'

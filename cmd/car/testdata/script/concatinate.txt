@@ -1,0 +1,23 @@
+stdin filteredroot.txt
+car filter ${INPUTS}/sample-wrapped-v2.car out.car
+! stderr .
+car list out.car
+! stderr .
+cmp stdout filteredroot.txt
+
+stdin filteredcids.txt
+car filter ${INPUTS}/sample-wrapped-v2.car out-2.car
+car list out-2.car
+! stderr .
+cmp stdout filteredcids.txt
+
+car concatinate -f combined.car out.car out-2.car
+! stderr .
+car list combined.car
+stdout -count=3 '^bafy'
+
+-- filteredroot.txt --
+bafy2bzaced4ueelaegfs5fqu4tzsh6ywbbpfk3cxppupmxfdhbpbhzawfw5oy
+-- filteredcids.txt --
+bafy2bzacebohz654namrgmwjjx4qmtwgxixsd7pn4tlanyrc3g3hwj75hlxrw
+bafy2bzaceaqtiesyfqd2jibmofz22oolguzf5wscwh73rmeypglfu2xhkptri
