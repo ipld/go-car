@@ -183,7 +183,10 @@ func writeCarV2(ctx context.Context, rootCid cid.Cid, output string, bs *blockst
 		if ok {
 			rs, err := lb.AsLargeBytes()
 			if err == nil {
-				io.Copy(io.Discard, rs)
+				_, err := io.Copy(io.Discard, rs)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
