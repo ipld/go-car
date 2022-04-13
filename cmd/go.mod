@@ -10,7 +10,7 @@ require (
 	github.com/ipfs/go-unixfsnode v1.4.0
 	github.com/ipld/go-car v0.3.3
 	github.com/ipld/go-car/v2 v2.1.2-0.20220121091436-7e10f104f452
-	github.com/ipld/go-codec-dagpb v1.3.0
+	github.com/ipld/go-codec-dagpb v1.3.1
 	github.com/ipld/go-ipld-prime v0.16.1-0.20220324131737-6e219a02ca16
 	github.com/multiformats/go-multicodec v0.4.1
 	github.com/multiformats/go-multihash v0.1.0
