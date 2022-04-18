@@ -40,7 +40,7 @@ type Options struct {
 	BlockstoreUseWholeCIDs       bool
 	MaxTraversalLinks            uint64
 	WriteAsCarV1                 bool
-	V1Size                       uint64
+	DataPayloadSize              uint64
 }
 
 // ApplyOptions applies given opts and returns the resulting Options.
