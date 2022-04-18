@@ -21,11 +21,11 @@ import (
 var store = memstore.Store{}
 var (
 	// baguqeeyexkjwnfy
-	leafAlpha, leafAlphaLnk = encode(basicnode.NewString("alpha"))
+	_, leafAlphaLnk = encode(basicnode.NewString("alpha"))
 	// baguqeeyeqvc7t3a
-	leafBeta, leafBetaLnk = encode(basicnode.NewString("beta"))
+	_, leafBetaLnk = encode(basicnode.NewString("beta"))
 	// baguqeeyezhlahvq
-	middleMapNode, middleMapNodeLnk = encode(fluent.MustBuildMap(basicnode.Prototype.Map, 3, func(na fluent.MapAssembler) {
+	_, middleMapNodeLnk = encode(fluent.MustBuildMap(basicnode.Prototype.Map, 3, func(na fluent.MapAssembler) {
 		na.AssembleEntry("foo").AssignBool(true)
 		na.AssembleEntry("bar").AssignBool(false)
 		na.AssembleEntry("nested").CreateMap(2, func(na fluent.MapAssembler) {
@@ -34,7 +34,7 @@ var (
 		})
 	}))
 	// baguqeeyehfkkfwa
-	middleListNode, middleListNodeLnk = encode(fluent.MustBuildList(basicnode.Prototype.List, 4, func(na fluent.ListAssembler) {
+	_, middleListNodeLnk = encode(fluent.MustBuildList(basicnode.Prototype.List, 4, func(na fluent.ListAssembler) {
 		na.AssembleValue().AssignLink(leafAlphaLnk)
 		na.AssembleValue().AssignLink(leafAlphaLnk)
 		na.AssembleValue().AssignLink(leafBetaLnk)
@@ -46,7 +46,7 @@ var (
 	// created, in-memory nodes and those that have passed through a codec with
 	// field ordering rules
 	// baguqeeyeie4ajfy
-	rootNode, rootNodeLnk = encode(fluent.MustBuildMap(basicnode.Prototype.Map, 4, func(na fluent.MapAssembler) {
+	rootNode, _ = encode(fluent.MustBuildMap(basicnode.Prototype.Map, 4, func(na fluent.MapAssembler) {
 		na.AssembleEntry("plain").AssignString("olde string")
 		na.AssembleEntry("linkedString").AssignLink(leafAlphaLnk)
 		na.AssembleEntry("linkedMap").AssignLink(middleMapNodeLnk)
