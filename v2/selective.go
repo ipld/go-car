@@ -14,6 +14,7 @@ import (
 	"github.com/ipld/go-car/v2/internal/carv1"
 	ioint "github.com/ipld/go-car/v2/internal/io"
 	"github.com/ipld/go-car/v2/internal/loader"
+	resumetraversal "github.com/ipld/go-car/v2/traversal"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
@@ -42,10 +43,10 @@ func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 	}
 }
 
-// WithV1Size sets the expected v1 size of the car being written if it is known in advance.
-func WithV1Size(size uint64) Option {
+// WithDataPayloadSize sets the expected v1 size of the car being written if it is known in advance.
+func WithDataPayloadSize(size uint64) Option {
 	return func(sco *Options) {
-		sco.V1Size = size
+		sco.DataPayloadSize = size
 	}
 }
 
@@ -53,9 +54,9 @@ func WithV1Size(size uint64) Option {
 // stream out a car to a writer in the expected traversal order in one go.
 func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
 	conf := ApplyOptions(opts...)
-	if conf.V1Size != 0 {
+	if conf.DataPayloadSize != 0 {
 		return &traversalCar{
-			size:     conf.V1Size,
+			size:     conf.DataPayloadSize,
 			ctx:      ctx,
 			root:     root,
 			selector: selector,
@@ -63,25 +64,27 @@ func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, 
 			opts:     ApplyOptions(opts...),
 		}, nil
 	}
-
-	cls, cntr := loader.CountingLinkSystem(*ls)
-
-	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
-	headSize, err := carv1.HeaderSize(&c1h)
-	if err != nil {
-		return nil, err
-	}
-	if err := traverse(ctx, &cls, root, selector, conf); err != nil {
-		return nil, err
-	}
 	tc := traversalCar{
-		size:     headSize + cntr.Size(),
+		//size:     headSize + cntr.Size(),
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
 		ls:       ls,
 		opts:     ApplyOptions(opts...),
 	}
+	if err := tc.setup(ctx, ls, ApplyOptions(opts...)); err != nil {
+		return nil, err
+	}
+
+	c1h := carv1.CarHeader{Roots: []cid.Cid{root}, Version: 1}
+	headSize, err := carv1.HeaderSize(&c1h)
+	if err != nil {
+		return nil, err
+	}
+	if err := tc.traverse(root, selector); err != nil {
+		return nil, err
+	}
+	tc.size = headSize + tc.resumer.Position()
 	return &tc, nil
 }
 
@@ -90,7 +93,7 @@ func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, 
 func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
 	conf := ApplyOptions(opts...)
 	tc := traversalCar{
-		size:     conf.V1Size,
+		size:     conf.DataPayloadSize,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
@@ -127,7 +130,7 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
 	tc := traversalCar{
-		size:     conf.V1Size,
+		size:     conf.DataPayloadSize,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
@@ -144,7 +147,7 @@ func CreateV1Reader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, sele
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
 	tc := traversalCar{
-		size:     conf.V1Size,
+		size:     conf.DataPayloadSize,
 		ctx:      ctx,
 		root:     root,
 		selector: selector,
@@ -155,7 +158,7 @@ func CreateV1Reader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, sele
 		s, _, err := tc.WriteV1(ctx, offset, writer)
 		return s, err
 	}
-	rw := ioint.NewSkipWriterReaderSeeker(ctx, conf.V1Size, rwf)
+	rw := ioint.NewSkipWriterReaderSeeker(ctx, conf.DataPayloadSize, rwf)
 	return rw, nil
 }
 
@@ -173,6 +176,8 @@ type traversalCar struct {
 	selector ipld.Node
 	ls       *ipld.LinkSystem
 	opts     Options
+	progress *traversal.Progress
+	resumer  resumetraversal.TraverseResumer
 }
 
 func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
@@ -272,7 +277,10 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 
 	// write the block.
 	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, skip, tc.opts.IndexCodec)
-	err = traverse(ctx, &wls, tc.root, tc.selector, tc.opts)
+	if err = tc.setup(ctx, &wls, tc.opts); err != nil {
+		return v1Size, nil, err
+	}
+	err = tc.traverse(tc.root, tc.selector)
 	v1Size = writer.Size() - v1Size + written
 	if err != nil {
 		return v1Size, nil, err
@@ -289,12 +297,7 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 	return v1Size, idx, err
 }
 
-func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Node, opts Options) error {
-	sel, err := selector.CompileSelector(s)
-	if err != nil {
-		return err
-	}
-
+func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Options) error {
 	chooser := func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
 		return basicnode.Prototype.Any, nil
 	}
@@ -317,17 +320,31 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 		}
 	}
 
-	lnk := cidlink.Link{Cid: root}
 	ls.TrustedStorage = true
-	rp, err := chooser(lnk, ipld.LinkContext{})
+	resumer, err := resumetraversal.WithTraversingLinksystem(&progress)
 	if err != nil {
 		return err
 	}
-	rootNode, err := ls.Load(ipld.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any)
+	tc.progress = &progress
+	tc.resumer = resumer
+	return nil
+}
+
+func (tc *traversalCar) traverse(root cid.Cid, s ipld.Node) error {
+	sel, err := selector.CompileSelector(s)
+	if err != nil {
+		return err
+	}
+	lnk := cidlink.Link{Cid: root}
+	rp, err := tc.progress.Cfg.LinkTargetNodePrototypeChooser(lnk, ipld.LinkContext{})
+	if err != nil {
+		return err
+	}
+	rootNode, err := tc.progress.Cfg.LinkSystem.Load(ipld.LinkContext{}, lnk, rp)
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
-	err = progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
+	err = tc.progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
 		if lbn, ok := node.(datamodel.LargeBytesNode); ok {
 			s, err := lbn.AsLargeBytes()
 			if err != nil {
