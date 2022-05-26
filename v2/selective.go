@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/ipld/go-car/v2/internal/loader"
 	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -259,7 +261,17 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
-	err = progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, _ ipld.Node) error {
+	err = progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
+		if lbn, ok := node.(datamodel.LargeBytesNode); ok {
+			s, err := lbn.AsLargeBytes()
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(ioutil.Discard, s)
+			if err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
