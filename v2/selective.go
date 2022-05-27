@@ -12,6 +12,7 @@ import (
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/ipld/go-car/v2/internal/loader"
+	dagpb "github.com/ipld/go-codec-dagpb"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
@@ -257,10 +258,11 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 
 	lnk := cidlink.Link{Cid: root}
 	ls.TrustedStorage = true
-	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, basicnode.Prototype.Any)
+	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, dagpb.Type.PBNode)
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
+
 	err = progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
 		if lbn, ok := node.(datamodel.LargeBytesNode); ok {
 			s, err := lbn.AsLargeBytes()
