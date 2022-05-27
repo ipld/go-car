@@ -238,14 +238,19 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 		return err
 	}
 
+	chooser := func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
+		return basicnode.Prototype.Any, nil
+	}
+	if opts.TraversalPrototypeChooser != nil {
+		chooser = opts.TraversalPrototypeChooser
+	}
+
 	progress := traversal.Progress{
 		Cfg: &traversal.Config{
-			Ctx:        ctx,
-			LinkSystem: *ls,
-			LinkTargetNodePrototypeChooser: func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
-				return basicnode.Prototype.Any, nil
-			},
-			LinkVisitOnlyOnce: !opts.BlockstoreAllowDuplicatePuts,
+			Ctx:                            ctx,
+			LinkSystem:                     *ls,
+			LinkTargetNodePrototypeChooser: chooser,
+			LinkVisitOnlyOnce:              !opts.BlockstoreAllowDuplicatePuts,
 		},
 	}
 	if opts.MaxTraversalLinks < math.MaxInt64 {
@@ -257,7 +262,11 @@ func traverse(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, s ipld.Nod
 
 	lnk := cidlink.Link{Cid: root}
 	ls.TrustedStorage = true
-	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, basicnode.Prototype.Any)
+	rp, err := chooser(lnk, ipld.LinkContext{})
+	if err != nil {
+		return err
+	}
+	rootNode, err := ls.Load(ipld.LinkContext{}, lnk, rp)
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
