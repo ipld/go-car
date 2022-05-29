@@ -7,10 +7,18 @@ import (
 	"path"
 	"testing"
 
+	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-unixfsnode"
+	"github.com/ipfs/go-unixfsnode/data/builder"
 	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
+	dagpb "github.com/ipld/go-codec-dagpb"
+	"github.com/ipld/go-ipld-prime/datamodel"
+	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/storage/bsadapter"
+	sb "github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/stretchr/testify/require"
 
@@ -80,4 +88,32 @@ func TestV1Traversal(t *testing.T) {
 
 	fa, _ := os.Stat("testdata/sample-v1.car")
 	require.Equal(t, fa.Size(), int64(n))
+}
+
+func TestPartialTraversal(t *testing.T) {
+	store := cidlink.Memory{Bag: make(map[string][]byte)}
+	ls := cidlink.DefaultLinkSystem()
+	ls.StorageReadOpener = store.OpenRead
+	ls.StorageWriteOpener = store.OpenWrite
+	unixfsnode.AddUnixFSReificationToLinkSystem(&ls)
+
+	// write a unixfs file.
+	initBuf := bytes.Buffer{}
+	_, _ = initBuf.Write(make([]byte, 1000000))
+	rt, _, err := builder.BuildUnixFSFile(&initBuf, "", &ls)
+	require.NoError(t, err)
+
+	// read a subset of the file.
+	_, rts, err := cid.CidFromBytes([]byte(rt.Binary()))
+	ssb := sb.NewSelectorSpecBuilder(basicnode.Prototype.Any)
+	sel := ssb.ExploreInterpretAs("unixfs", ssb.MatcherSubset(0, 256*1000))
+	buf := bytes.Buffer{}
+	chooser := dagpb.AddSupportToChooser(func(l datamodel.Link, lc linking.LinkContext) (datamodel.NodePrototype, error) {
+		return basicnode.Prototype.Any, nil
+	})
+	_, err = car.TraverseV1(context.Background(), &ls, rts, sel.Node(), &buf, car.WithTraversalPrototypeChooser(chooser))
+	require.NoError(t, err)
+
+	fb := len(buf.Bytes())
+	require.Less(t, fb, 1000000)
 }
