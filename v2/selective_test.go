@@ -22,7 +22,6 @@ import (
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/ipld/go-codec-dagpb"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	_ "github.com/ipld/go-ipld-prime/codec/raw"
 )
@@ -105,6 +104,7 @@ func TestPartialTraversal(t *testing.T) {
 
 	// read a subset of the file.
 	_, rts, err := cid.CidFromBytes([]byte(rt.Binary()))
+	require.NoError(t, err)
 	ssb := sb.NewSelectorSpecBuilder(basicnode.Prototype.Any)
 	sel := ssb.ExploreInterpretAs("unixfs", ssb.MatcherSubset(0, 256*1000))
 	buf := bytes.Buffer{}
