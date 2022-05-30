@@ -3,10 +3,12 @@ package car_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path"
 	"testing"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-unixfsnode"
 	"github.com/ipfs/go-unixfsnode/data/builder"
@@ -116,4 +118,20 @@ func TestPartialTraversal(t *testing.T) {
 
 	fb := len(buf.Bytes())
 	require.Less(t, fb, 1000000)
+
+	loaded, err := car.NewBlockReader(&buf)
+	require.NoError(t, err)
+	fnd := make(map[cid.Cid]struct{})
+	var b blocks.Block
+	for err == nil {
+		b, err = loaded.Next()
+		if err == io.EOF {
+			break
+		}
+		if _, ok := fnd[b.Cid()]; ok {
+			require.Fail(t, "duplicate block present", b.Cid())
+		}
+		fnd[b.Cid()] = struct{}{}
+	}
+	require.Equal(t, 2, len(fnd))
 }
