@@ -18,7 +18,6 @@ require (
 	github.com/multiformats/go-varint v0.0.6
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/stretchr/testify v1.7.0
-	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
 	golang.org/x/exp v0.0.0-20210615023648-acb5c1269671
 )
 
