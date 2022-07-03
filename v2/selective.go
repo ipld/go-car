@@ -138,7 +138,7 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 		opts:     conf,
 	}
 
-	len, _, err := tc.WriteV1(tc.ctx, 0, writer)
+	len, _, err := tc.WriteV1(tc.ctx, conf.SkipOffset, writer)
 	return len, err
 }
 
