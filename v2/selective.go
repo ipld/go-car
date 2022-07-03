@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"os"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/ipld/go-car/v2/internal/loader"
 	resumetraversal "github.com/ipld/go-car/v2/traversal"
 	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -296,14 +298,19 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 }
 
 func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Options) error {
+	chooser := func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
+		return basicnode.Prototype.Any, nil
+	}
+	if opts.TraversalPrototypeChooser != nil {
+		chooser = opts.TraversalPrototypeChooser
+	}
+
 	progress := traversal.Progress{
 		Cfg: &traversal.Config{
-			Ctx:        ctx,
-			LinkSystem: *ls,
-			LinkTargetNodePrototypeChooser: func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
-				return basicnode.Prototype.Any, nil
-			},
-			LinkVisitOnlyOnce: !opts.BlockstoreAllowDuplicatePuts,
+			Ctx:                            ctx,
+			LinkSystem:                     *ls,
+			LinkTargetNodePrototypeChooser: chooser,
+			LinkVisitOnlyOnce:              !opts.BlockstoreAllowDuplicatePuts,
 		},
 	}
 	if opts.MaxTraversalLinks < math.MaxInt64 {
@@ -324,17 +331,30 @@ func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Opt
 }
 
 func (tc *traversalCar) traverse(root cid.Cid, s ipld.Node) error {
-	ctx := tc.ctx
 	sel, err := selector.CompileSelector(s)
 	if err != nil {
 		return err
 	}
 	lnk := cidlink.Link{Cid: root}
-	rootNode, err := tc.progress.Cfg.LinkSystem.Load(ipld.LinkContext{Ctx: ctx}, lnk, basicnode.Prototype.Any)
+	rp, err := tc.progress.Cfg.LinkTargetNodePrototypeChooser(lnk, ipld.LinkContext{})
+	if err != nil {
+		return err
+	}
+	rootNode, err := tc.progress.Cfg.LinkSystem.Load(ipld.LinkContext{}, lnk, rp)
 	if err != nil {
 		return fmt.Errorf("root blk load failed: %s", err)
 	}
-	err = tc.progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, n ipld.Node) error {
+	err = tc.progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
+		if lbn, ok := node.(datamodel.LargeBytesNode); ok {
+			s, err := lbn.AsLargeBytes()
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(ioutil.Discard, s)
+			if err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {

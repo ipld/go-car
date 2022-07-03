@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/ipld/go-car/v2/index"
+	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/multiformats/go-multicodec"
 )
 
@@ -41,6 +42,7 @@ type Options struct {
 	MaxTraversalLinks            uint64
 	WriteAsCarV1                 bool
 	DataPayloadSize              uint64
+	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
 }
 
 // ApplyOptions applies given opts and returns the resulting Options.
@@ -117,5 +119,13 @@ func StoreIdentityCIDs(b bool) Option {
 func MaxIndexCidSize(s uint64) Option {
 	return func(o *Options) {
 		o.MaxIndexCidSize = s
+	}
+}
+
+// WithTraversalPrototypeChooser specifies the prototype chooser that should be used
+// when performing traversals in writes from a linksystem.
+func WithTraversalPrototypeChooser(t traversal.LinkTargetNodePrototypeChooser) Option {
+	return func(o *Options) {
+		o.TraversalPrototypeChooser = t
 	}
 }
