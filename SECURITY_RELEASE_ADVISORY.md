@@ -22,7 +22,7 @@ These vulnerabilities are not known to be exploited in the wild and were discove
 
 **Out of bound memory access** (OOB), **out of memory** (OOM) panics or **excessive memory usage** can be triggered by decode of malformed CARv1 headers, malformed CARv1 sections, and malformed CIDv0 data used in CARv1 sections. This also applies to CARv1 data within a CARv2 container.
 
-**Divide by zero**, **out of memory** (OOM) panics or **excessive memory usage** can be triggered by decode of intentionally malformed CARv2 indexes, or CARv2 indexes which are larger than available system memory (i.e. parallelization of CARv2 decodes may increase such a vulnerability).
+Additionally, we wish to use this security advisory to make clear to consumers of CARv2 format data that **loading CARv2 indexes from untrusted sources is dangerous and should be avoided**. Where CAR data indexes are required, they should be regenerated locally. Out of memory (OOM) panics or excessive memory usage can be triggered by decode of intentionally malformed CARv2 indexes, or CARv2 indexes which are larger than available system memory (i.e. parallelization of CARv2 decodes may increase such a vulnerability).
 
 ### Patches
 
@@ -63,11 +63,9 @@ Please be aware that the default values are **very generous** and may be lowered
 * Typical header lengths should be in the order of 60 bytes, but the CAR format does not specify a maximum number of roots a header may contain. The default maximum of 32 MiB makes room for novel uses of the CAR format.
 * Typical IPLD block sizes are under 2 MiB, and it is generally recommended that they not be above 1 MiB for maximum interoperability (e.g. there are hard limitations when sharing IPLD data with IPFS). CARv1 sections are the concatenation of CID and block bytes. The default maximum section length of 8 MiB makes room for novel IPLD data.
 
-***go-car@v2.4.0*** also changes the behavior of indexes read from existing CARv2 data. The `index.ReadFrom()` API lazily loads index data as required rather than being fully read into memory on load. The direct `Unmarshal()` API for specific index implementations is still available and will perform a full read of index data; a new `UnmarshalLazyRead()` API is now available on index implementations, this is now used by `index.ReadFrom()`.
+***go-car@v2.4.0*** introduces a new API that can be used to inspect a CAR and check for various errors, including those detailed in this advisory. The `Reader#Inspect(bool)` API returns a `CarStats` object with various details about the CAR, such as its version, number of blocks, and details about codecs and multihashers used. When its argument is `true`, it will also perform a full hash consistency check of blocks contained within the CAR to ensure they match the CIDs. When `false`, block data is skipped over so a scan will likely be more efficient than reading blocks through a `BlockReader` if statistics and/or validity checking is all that's required. Note that `Inspect()` does minimal checking of index data; the strong recommendation is that if index data is untrusted then it should be regenerated.
 
-Lazy loading *may* impact the performance profile of a CARv2 read depending on the specific usage scenario. The `blockstore` package contains a more efficient in-memory index that is generated each time a CAR is loaded and may be useful where the performance of random-access to blocks is of concern.
-
-***go-car@v2.4.0*** introduces a new API that can be used to inspect a CAR and check for various errors, including those detailed in this advisory. The `Reader#Inspect(bool)` API returns a `CarStats` object with various details about the CAR, such as its version, number of blocks, and details about codecs and multihashers used. When its argument is `true`, it will also perform a full hash consistency check of blocks contained within the CAR to ensure they match the CIDs. When `false`, block data is skipped over so a scan will likely be more efficient than reading blocks through a `BlockReader` if statistics and/or validity checking is all that's required. Note that `Inspect()` does minimal checking of index data; the strong recommendation is that if index data is untrusted then it should be re-generated.
+***go-car@v2.4.0*** also includes additional documentation regarding the dangers of consuming CARv2 index data from untrusted sources and a recommendation to regenerate indexes of CAR data from such sources where an index is required.
 
 ### Workarounds
 
