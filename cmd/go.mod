@@ -6,13 +6,13 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-cid v0.1.0
-	github.com/ipfs/go-ipfs-blockstore v1.1.2
+	github.com/ipfs/go-ipld-format v0.3.0
 	github.com/ipfs/go-unixfsnode v1.4.0
 	github.com/ipld/go-car v0.4.0
-	github.com/ipld/go-car/v2 v2.1.2-0.20220121091436-7e10f104f452
+	github.com/ipld/go-car/v2 v2.4.1
 	github.com/ipld/go-codec-dagpb v1.3.1
 	github.com/ipld/go-ipld-prime v0.16.1-0.20220324131737-6e219a02ca16
-	github.com/multiformats/go-multicodec v0.4.1
+	github.com/multiformats/go-multicodec v0.5.0
 	github.com/multiformats/go-multihash v0.1.0
 	github.com/multiformats/go-varint v0.0.6
 	github.com/rogpeppe/go-internal v1.8.1
@@ -27,18 +27,18 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-bitfield v1.0.0 // indirect
-	github.com/ipfs/go-blockservice v0.2.1 // indirect
+	github.com/ipfs/go-blockservice v0.3.0 // indirect
 	github.com/ipfs/go-datastore v0.5.1 // indirect
+	github.com/ipfs/go-ipfs-blockstore v1.2.0 // indirect
 	github.com/ipfs/go-ipfs-chunker v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
 	github.com/ipfs/go-ipfs-exchange-interface v0.1.0 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
 	github.com/ipfs/go-ipld-cbor v0.0.5 // indirect
-	github.com/ipfs/go-ipld-format v0.2.0 // indirect
 	github.com/ipfs/go-ipld-legacy v0.1.0 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.3.0 // indirect
-	github.com/ipfs/go-merkledag v0.5.1 // indirect
+	github.com/ipfs/go-merkledag v0.6.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-verifcid v0.0.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
