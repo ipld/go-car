@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/ipld/go-car/v2/index"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/multiformats/go-multicodec"
 
@@ -63,6 +64,8 @@ type Options struct {
 
 	MaxAllowedHeaderSize  uint64
 	MaxAllowedSectionSize uint64
+
+	EmbeddedMessage datamodel.Node
 }
 
 // ApplyOptions applies given opts and returns the resulting Options.
@@ -170,5 +173,14 @@ func MaxAllowedHeaderSize(max uint64) Option {
 func MaxAllowedSectionSize(max uint64) Option {
 	return func(o *Options) {
 		o.MaxAllowedSectionSize = max
+	}
+}
+
+// EmbedMessage writes a length-prefixed dag-cbor message after the CARv2 header
+// and sets the 'MessageAfterHeader' characteristic bit is set for the resulting
+// CAR
+func EmbedMessage(msg datamodel.Node) Option {
+	return func(o *Options) {
+		o.EmbeddedMessage = msg
 	}
 }

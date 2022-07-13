@@ -159,6 +159,14 @@ func TestMaxHeaderLength(t *testing.T) {
 	require.EqualError(t, err, "invalid header data, length of read beyond allowable maximum")
 }
 
+func TestCanReadMessagingCar(t *testing.T) {
+	car, err := carv2.NewBlockReader(requireReaderFromPath(t, "testdata/messaging.car"))
+	require.NoError(t, err)
+	readBlock, err := car.Next()
+	require.NoError(t, err)
+	require.Equal(t, "random meaningless bytes", string(readBlock.RawData()))
+}
+
 func requireReaderFromPath(t *testing.T, path string) io.Reader {
 	f, err := os.Open(path)
 	require.NoError(t, err)

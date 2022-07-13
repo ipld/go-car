@@ -205,43 +205,69 @@ func TestNewHeaderHasExpectedValues(t *testing.T) {
 	assert.Equal(t, want, got, "NewHeader got = %v, want = %v", got, want)
 }
 
-func TestCharacteristics_StoreIdentityCIDs(t *testing.T) {
-	subject := carv2.Characteristics{}
-	require.False(t, subject.IsFullyIndexed())
+func TestCharacteristics(t *testing.T) {
+	tests := []struct {
+		name        string
+		isset       func(carv2.Characteristics) bool
+		set         func(*carv2.Characteristics, bool)
+		expectBytes []byte
+	}{
+		{
+			"FullyIndexed",
+			func(c carv2.Characteristics) bool { return c.IsFullyIndexed() },
+			func(c *carv2.Characteristics, s bool) { c.SetFullyIndexed(s) },
+			[]byte{
+				0x80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+				0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			},
+		},
+		{
+			"MessageAfterHeader",
+			func(c carv2.Characteristics) bool { return c.IsMessageAfterHeader() },
+			func(c *carv2.Characteristics, s bool) { c.SetMessageAfterHeader(s) },
+			[]byte{
+				0x40, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+				0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			subject := carv2.Characteristics{}
+			require.False(t, tt.isset(subject))
+			tt.set(&subject, true)
+			require.True(t, tt.isset(subject))
 
-	subject.SetFullyIndexed(true)
-	require.True(t, subject.IsFullyIndexed())
+			var buf bytes.Buffer
+			written, err := subject.WriteTo(&buf)
+			require.NoError(t, err)
+			require.Equal(t, int64(16), written)
+			require.Equal(t, tt.expectBytes, buf.Bytes())
 
-	var buf bytes.Buffer
-	written, err := subject.WriteTo(&buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(16), written)
-	require.Equal(t, []byte{
-		0x80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-	}, buf.Bytes())
+			var decodedSubject carv2.Characteristics
+			read, err := decodedSubject.ReadFrom(&buf)
+			require.NoError(t, err)
+			require.Equal(t, int64(16), read)
+			require.True(t, tt.isset(decodedSubject))
 
-	var decodedSubject carv2.Characteristics
-	read, err := decodedSubject.ReadFrom(&buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(16), read)
-	require.True(t, decodedSubject.IsFullyIndexed())
+			buf.Reset()
+			tt.set(&subject, false)
+			require.False(t, tt.isset(subject))
 
-	buf.Reset()
-	subject.SetFullyIndexed(false)
-	require.False(t, subject.IsFullyIndexed())
+			written, err = subject.WriteTo(&buf)
+			require.NoError(t, err)
+			require.Equal(t, int64(16), written)
+			require.Equal(t, []byte{
+				0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+				0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+			}, buf.Bytes())
 
-	written, err = subject.WriteTo(&buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(16), written)
-	require.Equal(t, []byte{
-		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-	}, buf.Bytes())
-
-	var decodedSubjectAgain carv2.Characteristics
-	read, err = decodedSubjectAgain.ReadFrom(&buf)
-	require.NoError(t, err)
-	require.Equal(t, int64(16), read)
-	require.False(t, decodedSubjectAgain.IsFullyIndexed())
+			var decodedSubjectAgain carv2.Characteristics
+			read, err = decodedSubjectAgain.ReadFrom(&buf)
+			require.NoError(t, err)
+			require.Equal(t, int64(16), read)
+			require.False(t, tt.isset(decodedSubjectAgain))
+		})
+	}
 }

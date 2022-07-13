@@ -44,8 +44,12 @@ type (
 	}
 )
 
-// fullyIndexedCharPos is the position of Characteristics.Hi bit that specifies whether the index is a catalog af all CIDs or not.
+// fullyIndexedCharPos is the position of Characteristics.Hi bit that specifies whether the index is
+// a catalog af all CIDs or not.
 const fullyIndexedCharPos = 7 // left-most bit
+// messageAfterHeaderCharPos is the position of Characteristics.Hi bit that specifies whether there
+// is a length-prefixed dag-cbor message object directly after the header.
+const messageAfterHeaderCharPos = 6 // second-to-left-most bit
 
 // WriteTo writes this characteristics to the given w.
 func (c Characteristics) WriteTo(w io.Writer) (n int64, err error) {
@@ -80,6 +84,22 @@ func (c *Characteristics) SetFullyIndexed(b bool) {
 		c.Hi = setBit(c.Hi, fullyIndexedCharPos)
 	} else {
 		c.Hi = unsetBit(c.Hi, fullyIndexedCharPos)
+	}
+}
+
+// IsMessageAfterHeader specifies whether there is a length-prefixed dag-cbor message embedded
+// directly after the CARv2 header that can optionally be decoded.
+func (c *Characteristics) IsMessageAfterHeader() bool {
+	return isBitSet(c.Hi, messageAfterHeaderCharPos)
+}
+
+// SetMessageAfterHeader sets whether there is a length-prefixed dag-cbor message embedded directly
+// after the CARv2 header.
+func (c *Characteristics) SetMessageAfterHeader(b bool) {
+	if b {
+		c.Hi = setBit(c.Hi, messageAfterHeaderCharPos)
+	} else {
+		c.Hi = unsetBit(c.Hi, messageAfterHeaderCharPos)
 	}
 }
 

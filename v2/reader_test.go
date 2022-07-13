@@ -12,6 +12,8 @@ import (
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
+	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/multiformats/go-multicodec"
 	"github.com/stretchr/testify/require"
 )
@@ -424,6 +426,31 @@ func TestInspect(t *testing.T) {
 				MinCidLength: 25,
 			},
 		},
+		// CARv2 with embedded message
+		{
+			name:        "CarWithMessage",
+			path:        "testdata/messaging.car",
+			zerLenAsEOF: true,
+			expectedStats: carv2.Stats{
+				Version: 2,
+				Header: carv2.Header{
+					Characteristics: carv2.Characteristics{Hi: 64},
+					DataOffset:      158,
+					DataSize:        120,
+				},
+				Roots:          []cid.Cid{mustCidDecode("bafkreihwkf6mtnjobdqrkiksr7qhp6tiiqywux64aylunbvmfhzeql2coa")},
+				RootsPresent:   true,
+				AvgBlockLength: 24,
+				MinBlockLength: 24,
+				MaxBlockLength: 24,
+				AvgCidLength:   36,
+				MinCidLength:   36,
+				MaxCidLength:   36,
+				BlockCount:     1,
+				CodecCounts:    map[multicodec.Code]uint64{multicodec.Raw: 1},
+				MhTypeCounts:   map[multicodec.Code]uint64{multicodec.Sha2_256: 1},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -559,4 +586,33 @@ func mustCidDecode(s string) cid.Cid {
 		panic(err)
 	}
 	return c
+}
+
+func TestEmbeddedMessage(t *testing.T) {
+	t.Run("has", func(t *testing.T) {
+		r, err := carv2.OpenReader("testdata/messaging.car")
+		require.NoError(t, err)
+		msg, err := r.ReadEmbeddedMessage()
+		require.NoError(t, err)
+		enc, err := ipld.Encode(msg, dagjson.Encode)
+		require.NoError(t, err)
+		require.Equal(t,
+			`{"expectedRoot":{"/":"bafkreihwkf6mtnjobdqrkiksr7qhp6tiiqywux64aylunbvmfhzeql2coa"},"sneaky":"sending a message outside of CARv1 payload"}`,
+			string(enc),
+		)
+	})
+	t.Run("hasnot-v1", func(t *testing.T) {
+		r, err := carv2.OpenReader("testdata/sample-v1.car")
+		require.NoError(t, err)
+		_, err = r.ReadEmbeddedMessage()
+		require.NotNil(t, err)
+		require.Equal(t, err.Error(), "'MessageAfterHeader' bit is not set in the characteristics for this CAR")
+	})
+	t.Run("hasnot-v2", func(t *testing.T) {
+		r, err := carv2.OpenReader("testdata/sample-wrapped-v2.car")
+		require.NoError(t, err)
+		_, err = r.ReadEmbeddedMessage()
+		require.NotNil(t, err)
+		require.Equal(t, err.Error(), "'MessageAfterHeader' bit is not set in the characteristics for this CAR")
+	})
 }
