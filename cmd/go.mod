@@ -71,7 +71,3 @@ require (
 	gopkg.in/errgo.v2 v2.1.0 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
-
-replace github.com/ipld/go-car/v2 => ../v2
-
-replace github.com/ipld/go-car => ../
