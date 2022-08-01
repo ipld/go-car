@@ -113,8 +113,8 @@ func OpenReadWrite(path string, roots []cid.Cid, opts ...carv2.Option) (*ReadWri
 	return rwbs, nil
 }
 
-// OpenReadWriteFile is similar as OpenReadWrite but let you control the file lifecycle.
-// You are responsible to close the given file.
+// OpenReadWriteFile is similar as OpenReadWrite but lets you control the file lifecycle.
+// You are responsible for closing the given file.
 func OpenReadWriteFile(f *os.File, roots []cid.Cid, opts ...carv2.Option) (*ReadWrite, error) {
 	stat, err := f.Stat()
 	if err != nil {
