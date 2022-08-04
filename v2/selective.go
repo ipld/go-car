@@ -142,8 +142,8 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 	return len, err
 }
 
-// CreateV1Reader creates an io.ReadSeeker that can be used to copy out the carv1 contents of a car.
-func CreateV1Reader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
+// NewCarV1StreamReader creates an io.ReadSeeker that can be used to copy out the carv1 contents of a car.
+func NewCarV1StreamReader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
 	tc := traversalCar{
