@@ -12,7 +12,8 @@ import (
 	"github.com/multiformats/go-varint"
 )
 
-type writerOutput struct {
+// indexingWriter wraps an io.Writer with metadata of the index of the car written to it.
+type indexingWriter struct {
 	w      io.Writer
 	size   uint64
 	toSkip uint64
@@ -20,15 +21,16 @@ type writerOutput struct {
 	rcrds  map[cid.Cid]index.Record
 }
 
-func (w *writerOutput) Size() uint64 {
+func (w *indexingWriter) Size() uint64 {
 	return w.size
 }
 
-func (w *writerOutput) Index() (index.Index, error) {
+func (w *indexingWriter) Index() (index.Index, error) {
 	idx, err := index.New(w.code)
 	if err != nil {
 		return nil, err
 	}
+	// todo: maybe keep both a map and a list proactively for efficiency here.
 	rcrds := make([]index.Record, 0, len(w.rcrds))
 	for _, r := range w.rcrds {
 		rcrds = append(rcrds, r)
@@ -47,39 +49,50 @@ type IndexTracker interface {
 	Index() (index.Index, error)
 }
 
+var _ IndexTracker = (*indexingWriter)(nil)
+
 type writingReader struct {
 	r   io.Reader
-	len int64
+	buf []byte
 	cid string
-	wo  *writerOutput
+	wo  *indexingWriter
 }
 
 func (w *writingReader) Read(p []byte) (int, error) {
-	buf := bytes.NewBuffer(nil)
 	if w.wo != nil {
-		// write the cid
-		size := varint.ToUvarint(uint64(w.len) + uint64(len(w.cid)))
-		if _, err := buf.Write(size); err != nil {
+		// build the buffer of size:cid:block if we don't have it yet.
+		buf := bytes.NewBuffer(nil)
+		// allocate space for size
+		_, err := buf.Write(make([]byte, varint.MaxLenUvarint63))
+		if err != nil {
 			return 0, err
 		}
+		// write the cid
 		if _, err := buf.Write([]byte(w.cid)); err != nil {
 			return 0, err
 		}
-		cpy := bytes.NewBuffer(w.r.(*bytes.Buffer).Bytes())
-		if _, err := cpy.WriteTo(buf); err != nil {
+		// write the block
+		n, err := io.Copy(buf, w.r)
+		if err != nil {
 			return 0, err
 		}
-		out := buf.Bytes()
+		sizeBytes := varint.ToUvarint(uint64(n) + uint64(len(w.cid)))
+		writeBuf := buf.Bytes()[varint.MaxLenUvarint63-len(sizeBytes):]
+		w.buf = buf.Bytes()[varint.MaxLenUvarint63+len(w.cid):]
+		_ = copy(writeBuf[:], sizeBytes)
+
+		size := len(writeBuf)
 		if w.wo.toSkip > 0 {
-			if w.wo.toSkip >= uint64(len(out)) {
-				w.wo.toSkip -= uint64(len(out))
-				out = []byte{}
+			if w.wo.toSkip >= uint64(len(writeBuf)) {
+				w.wo.toSkip -= uint64(len(writeBuf))
+				writeBuf = []byte{}
 			} else {
-				out = out[w.wo.toSkip:]
+				writeBuf = writeBuf[w.wo.toSkip:]
 				w.wo.toSkip = 0
 			}
 		}
-		if _, err := bytes.NewBuffer(out).WriteTo(w.wo.w); err != nil {
+
+		if _, err := bytes.NewBuffer(writeBuf).WriteTo(w.wo.w); err != nil {
 			return 0, err
 		}
 		_, c, err := cid.CidFromBytes([]byte(w.cid))
@@ -90,9 +103,17 @@ func (w *writingReader) Read(p []byte) (int, error) {
 			Cid:    c,
 			Offset: w.wo.size,
 		}
-		w.wo.size += uint64(w.len) + uint64(len(size)+len(w.cid))
-
+		w.wo.size += uint64(size)
 		w.wo = nil
+	}
+
+	if w.buf != nil {
+		n, err := bytes.NewBuffer(w.buf).Read(p)
+		if err != nil {
+			return n, err
+		}
+		w.buf = w.buf[n:]
+		return n, err
 	}
 
 	return w.r.Read(p)
@@ -105,7 +126,7 @@ func (w *writingReader) Read(p []byte) (int, error) {
 //   included in the `.Size()` of the IndexTracker.
 // An indexCodec of `index.CarIndexNoIndex` can be used to not track these offsets.
 func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, skip uint64, indexCodec multicodec.Code) (ipld.LinkSystem, IndexTracker) {
-	wo := writerOutput{
+	iw := indexingWriter{
 		w:      w,
 		size:   initialOffset,
 		toSkip: skip,
@@ -121,7 +142,7 @@ func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, ski
 		}
 
 		// if we've already read this cid in this session, don't re-write it.
-		if _, ok := wo.rcrds[c]; ok {
+		if _, ok := iw.rcrds[c]; ok {
 			return ls.StorageReadOpener(lc, l)
 		}
 
@@ -129,12 +150,8 @@ func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, ski
 		if err != nil {
 			return nil, err
 		}
-		buf := bytes.NewBuffer(nil)
-		n, err := buf.ReadFrom(r)
-		if err != nil {
-			return nil, err
-		}
-		return &writingReader{buf, n, l.Binary(), &wo}, nil
+
+		return &writingReader{r, nil, l.Binary(), &iw}, nil
 	}
-	return tls, &wo
+	return tls, &iw
 }
