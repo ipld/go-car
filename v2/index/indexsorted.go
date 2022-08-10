@@ -3,7 +3,9 @@ package index
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	internalio "github.com/ipld/go-car/v2/internal/io"
 	"io"
 	"sort"
 
@@ -61,16 +63,51 @@ func (s *singleWidthIndex) Marshal(w io.Writer) (uint64, error) {
 }
 
 func (s *singleWidthIndex) Unmarshal(r io.Reader) error {
-	if err := binary.Read(r, binary.LittleEndian, &s.width); err != nil {
+	var width uint32
+	if err := binary.Read(r, binary.LittleEndian, &width); err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
 		return err
 	}
-	if err := binary.Read(r, binary.LittleEndian, &s.len); err != nil {
+	var dataLen uint64
+	if err := binary.Read(r, binary.LittleEndian, &dataLen); err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
 		return err
 	}
-	s.index = make([]byte, s.len)
-	s.len /= uint64(s.width)
-	_, err := io.ReadFull(r, s.index)
-	return err
+
+	if err := s.checkUnmarshalLengths(width, dataLen, 0); err != nil {
+		return err
+	}
+
+	buf := make([]byte, dataLen)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return err
+	}
+	s.index = buf
+	return nil
+}
+
+func (s *singleWidthIndex) checkUnmarshalLengths(width uint32, dataLen, extra uint64) error {
+	if width < 8 {
+		return errors.New("malformed index; width must be at least 8")
+	}
+	const maxWidth = 32 << 20 // 32MiB, to ~match the go-cid maximum
+	if width > maxWidth {
+		return errors.New("index too big; singleWidthIndex width is larger than allowed maximum")
+	}
+	oldDataLen, dataLen := dataLen, dataLen+extra
+	if oldDataLen > dataLen {
+		return errors.New("index too big; singleWidthIndex len is overflowing")
+	}
+	if int64(dataLen) < 0 {
+		return errors.New("index too big; singleWidthIndex len is overflowing int64")
+	}
+	s.width = width
+	s.len = dataLen / uint64(width)
+	return nil
 }
 
 func (s *singleWidthIndex) Less(i int, digest []byte) bool {
@@ -190,14 +227,34 @@ func (m *multiWidthIndex) Marshal(w io.Writer) (uint64, error) {
 }
 
 func (m *multiWidthIndex) Unmarshal(r io.Reader) error {
+	reader := internalio.ToByteReadSeeker(r)
 	var l int32
-	if err := binary.Read(r, binary.LittleEndian, &l); err != nil {
+	if err := binary.Read(reader, binary.LittleEndian, &l); err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
 		return err
+	}
+	sum, err := reader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return err
+	}
+	if int32(l) < 0 {
+		return errors.New("index too big; multiWidthIndex count is overflowing int32")
 	}
 	for i := 0; i < int(l); i++ {
 		s := singleWidthIndex{}
 		if err := s.Unmarshal(r); err != nil {
 			return err
+		}
+		n, err := reader.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return err
+		}
+		oldSum := sum
+		sum += n
+		if sum < oldSum {
+			return errors.New("index too big; multiWidthIndex len is overflowing int64")
 		}
 		(*m)[s.width] = s
 	}

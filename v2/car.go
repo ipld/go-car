@@ -2,6 +2,7 @@ package car
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -166,8 +167,27 @@ func (h *Header) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return n, err
 	}
-	h.DataOffset = binary.LittleEndian.Uint64(buf[:8])
-	h.DataSize = binary.LittleEndian.Uint64(buf[8:16])
-	h.IndexOffset = binary.LittleEndian.Uint64(buf[16:])
+	dataOffset := binary.LittleEndian.Uint64(buf[:8])
+	dataSize := binary.LittleEndian.Uint64(buf[8:16])
+	indexOffset := binary.LittleEndian.Uint64(buf[16:])
+	// Assert the data payload offset validity.
+	// It must be at least 51 (<CARv2Pragma> + <CARv2Header>).
+	if int64(dataOffset) < PragmaSize+HeaderSize {
+		return n, fmt.Errorf("invalid data payload offset: %v", dataOffset)
+	}
+	// Assert the data size validity.
+	// It must be larger than zero.
+	// Technically, it should be at least 11 bytes (i.e. a valid CARv1 header with no roots) but
+	// we let further parsing of the header to signal invalid data payload header.
+	if int64(dataSize) <= 0 {
+		return n, fmt.Errorf("invalid data payload size: %v", dataSize)
+	}
+	// Assert the index offset validity.
+	if int64(indexOffset) < 0 {
+		return n, fmt.Errorf("invalid index offset: %v", indexOffset)
+	}
+	h.DataOffset = dataOffset
+	h.DataSize = dataSize
+	h.IndexOffset = indexOffset
 	return n, nil
 }

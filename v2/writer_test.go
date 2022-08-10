@@ -47,14 +47,18 @@ func TestWrapV1(t *testing.T) {
 	require.NoError(t, err)
 	wantPayload, err := ioutil.ReadAll(sf)
 	require.NoError(t, err)
-	gotPayload, err := ioutil.ReadAll(subject.DataReader())
+	dr, err := subject.DataReader()
+	require.NoError(t, err)
+	gotPayload, err := ioutil.ReadAll(dr)
 	require.NoError(t, err)
 	require.Equal(t, wantPayload, gotPayload)
 
 	// Assert embedded index in CARv2 is same as index generated from the original CARv1.
 	wantIdx, err := GenerateIndexFromFile(src)
 	require.NoError(t, err)
-	gotIdx, err := index.ReadFrom(subject.IndexReader())
+	ir, err := subject.IndexReader()
+	require.NoError(t, err)
+	gotIdx, err := index.ReadFrom(ir)
 	require.NoError(t, err)
 	require.Equal(t, wantIdx, gotIdx)
 }

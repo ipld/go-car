@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/ipfs/go-cid"
 	internalio "github.com/ipld/go-car/v2/internal/io"
 
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
-
 	"github.com/multiformats/go-varint"
-
-	"github.com/ipfs/go-cid"
 )
 
 // CarIndexNone is a sentinal value used as a multicodec code for the index indicating no index.
@@ -44,7 +42,12 @@ type (
 
 		// Marshal encodes the index in serial form.
 		Marshal(w io.Writer) (uint64, error)
+
 		// Unmarshal decodes the index from its serial form.
+		// Note, this function will copy the entire index into memory.
+		//
+		// Do not unmarshal index from untrusted CARv2 files. Instead the index should be
+		// regenerated from the CARv2 data payload.
 		Unmarshal(r io.Reader) error
 
 		// Load inserts a number of records into the index.
@@ -68,14 +71,7 @@ type (
 		GetAll(cid.Cid, func(uint64) bool) error
 	}
 
-	// IterableIndex extends Index in cases where the Index is able to
-	// provide an iterator for getting the list of all multihashes in the
-	// index.
-	//
-	// Note that it is possible for an index to contain multiple offsets for
-	// a given multihash.
-	//
-	// See: IterableIndex.ForEach, Index.GetAll.
+	// IterableIndex is an index which support iterating over it's elements
 	IterableIndex interface {
 		Index
 
@@ -136,12 +132,14 @@ func WriteTo(idx Index, w io.Writer) (uint64, error) {
 // ReadFrom reads index from r.
 // The reader decodes the index by reading the first byte to interpret the encoding.
 // Returns error if the encoding is not known.
+//
+// Attempting to read index data from untrusted sources is not recommended.
+// Instead the index should be regenerated from the CARv2 data payload.
 func ReadFrom(r io.Reader) (Index, error) {
-	code, err := varint.ReadUvarint(internalio.ToByteReader(r))
+	codec, err := ReadCodec(r)
 	if err != nil {
 		return nil, err
 	}
-	codec := multicodec.Code(code)
 	idx, err := New(codec)
 	if err != nil {
 		return nil, err
@@ -150,4 +148,13 @@ func ReadFrom(r io.Reader) (Index, error) {
 		return nil, err
 	}
 	return idx, nil
+}
+
+// ReadCodec reads the codec of the index by decoding the first varint read from r.
+func ReadCodec(r io.Reader) (multicodec.Code, error) {
+	code, err := varint.ReadUvarint(internalio.ToByteReader(r))
+	if err != nil {
+		return 0, err
+	}
+	return multicodec.Code(code), nil
 }

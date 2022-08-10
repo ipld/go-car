@@ -10,12 +10,13 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	"github.com/multiformats/go-varint"
+
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/ipld/go-car/v2/internal/carv1/util"
 	internalio "github.com/ipld/go-car/v2/internal/io"
-	"github.com/multiformats/go-varint"
 )
 
 var _ blockstore.Blockstore = (*ReadWrite)(nil)
@@ -86,12 +87,12 @@ func AllowDuplicatePuts(allow bool) carv2.Option {
 // successfully. On resumption the roots argument and WithDataPadding option must match the
 // previous instantiation of ReadWrite blockstore that created the file. More explicitly, the file
 // resuming from must:
-//   1. start with a complete CARv2 car.Pragma.
-//   2. contain a complete CARv1 data header with root CIDs matching the CIDs passed to the
-//      constructor, starting at offset optionally padded by WithDataPadding, followed by zero or
-//      more complete data sections. If any corrupt data sections are present the resumption will fail.
-//      Note, if set previously, the blockstore must use the same WithDataPadding option as before,
-//      since this option is used to locate the CARv1 data payload.
+//  1. start with a complete CARv2 car.Pragma.
+//  2. contain a complete CARv1 data header with root CIDs matching the CIDs passed to the
+//     constructor, starting at offset optionally padded by WithDataPadding, followed by zero or
+//     more complete data sections. If any corrupt data sections are present the resumption will fail.
+//     Note, if set previously, the blockstore must use the same WithDataPadding option as before,
+//     since this option is used to locate the CARv1 data payload.
 //
 // Note, resumption should be used with WithCidDeduplication, so that blocks that are successfully
 // written into the file are not re-written. Unless, the user explicitly wants duplicate blocks.
@@ -103,6 +104,18 @@ func OpenReadWrite(path string, roots []cid.Cid, opts ...carv2.Option) (*ReadWri
 	if err != nil {
 		return nil, fmt.Errorf("could not open read/write file: %w", err)
 	}
+	rwbs, err := OpenReadWriteFile(f, roots, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// close the file when finalizing
+	rwbs.ronly.carv2Closer = rwbs.f
+	return rwbs, nil
+}
+
+// OpenReadWriteFile is similar as OpenReadWrite but lets you control the file lifecycle.
+// You are responsible for closing the given file.
+func OpenReadWriteFile(f *os.File, roots []cid.Cid, opts ...carv2.Option) (*ReadWrite, error) {
 	stat, err := f.Stat()
 	if err != nil {
 		// Note, we should not get a an os.ErrNotExist here because the flags used to open file includes os.O_CREATE
@@ -139,10 +152,12 @@ func OpenReadWrite(path string, roots []cid.Cid, opts ...carv2.Option) (*ReadWri
 		offset = 0
 	}
 	rwbs.dataWriter = internalio.NewOffsetWriter(rwbs.f, offset)
-	v1r := internalio.NewOffsetReadSeeker(rwbs.f, offset)
+	v1r, err := internalio.NewOffsetReadSeeker(rwbs.f, offset)
+	if err != nil {
+		return nil, err
+	}
 	rwbs.ronly.backing = v1r
 	rwbs.ronly.idx = rwbs.idx
-	rwbs.ronly.carv2Closer = rwbs.f
 
 	if resume {
 		if err = rwbs.resumeWithRoots(!rwbs.opts.WriteAsCarV1, roots); err != nil {
@@ -190,7 +205,11 @@ func (b *ReadWrite) resumeWithRoots(v2 bool, roots []cid.Cid) error {
 		// Check if file was finalized by trying to read the CARv2 header.
 		// We check because if finalized the CARv1 reader behaviour needs to be adjusted since
 		// EOF will not signify end of CARv1 payload. i.e. index is most likely present.
-		_, err = headerInFile.ReadFrom(internalio.NewOffsetReadSeeker(b.f, carv2.PragmaSize))
+		r, err := internalio.NewOffsetReadSeeker(b.f, carv2.PragmaSize)
+		if err != nil {
+			return err
+		}
+		_, err = headerInFile.ReadFrom(r)
 
 		// If reading CARv2 header succeeded, and CARv1 offset in header is not zero then the file is
 		// most-likely finalized. Check padding and truncate the file to remove index.
@@ -216,8 +235,11 @@ func (b *ReadWrite) resumeWithRoots(v2 bool, roots []cid.Cid) error {
 	}
 
 	// Use the given CARv1 padding to instantiate the CARv1 reader on file.
-	v1r := internalio.NewOffsetReadSeeker(b.ronly.backing, 0)
-	header, err := carv1.ReadHeader(v1r)
+	v1r, err := internalio.NewOffsetReadSeeker(b.ronly.backing, 0)
+	if err != nil {
+		return err
+	}
+	header, err := carv1.ReadHeader(v1r, b.opts.MaxAllowedHeaderSize)
 	if err != nil {
 		// Cannot read the CARv1 header; the file is most likely corrupt.
 		return fmt.Errorf("error reading car header: %w", err)

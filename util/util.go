@@ -4,12 +4,19 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
 	cid "github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 )
+
+// MaxAllowedSectionSize dictates the maximum number of bytes that a CARv1 header
+// or section is allowed to occupy without causing a decode to error.
+// This cannot be supplied as an option, only adjusted as a global. You should
+// use v2#NewReader instead since it allows for options to be passed in.
+var MaxAllowedSectionSize uint = 32 << 20 // 32MiB
 
 var cidv0Pref = []byte{0x12, 0x20}
 
@@ -18,11 +25,15 @@ type BytesReader interface {
 	io.ByteReader
 }
 
-// TODO: this belongs in the go-cid package
+// Deprecated: ReadCid shouldn't be used directly, use CidFromReader from go-cid
 func ReadCid(buf []byte) (cid.Cid, int, error) {
-	if bytes.Equal(buf[:2], cidv0Pref) {
-		c, err := cid.Cast(buf[:34])
-		return c, 34, err
+	if len(buf) >= 2 && bytes.Equal(buf[:2], cidv0Pref) {
+		i := 34
+		if len(buf) < i {
+			i = len(buf)
+		}
+		c, err := cid.Cast(buf[:i])
+		return c, i, err
 	}
 
 	br := bytes.NewReader(buf)
@@ -58,7 +69,7 @@ func ReadNode(br *bufio.Reader) (cid.Cid, []byte, error) {
 		return cid.Cid{}, nil, err
 	}
 
-	c, n, err := ReadCid(data)
+	n, c, err := cid.CidFromReader(bytes.NewReader(data))
 	if err != nil {
 		return cid.Cid{}, nil, err
 	}
@@ -110,6 +121,10 @@ func LdRead(r *bufio.Reader) ([]byte, error) {
 			return nil, io.ErrUnexpectedEOF // don't silently pretend this is a clean EOF
 		}
 		return nil, err
+	}
+
+	if l > uint64(MaxAllowedSectionSize) { // Don't OOM
+		return nil, errors.New("malformed car; header is bigger than util.MaxAllowedSectionSize")
 	}
 
 	buf := make([]byte, l)

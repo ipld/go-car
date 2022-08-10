@@ -2,6 +2,8 @@ package index
 
 import (
 	"encoding/binary"
+	"errors"
+	internalio "github.com/ipld/go-car/v2/internal/io"
 	"io"
 	"sort"
 
@@ -41,6 +43,9 @@ func (m *multiWidthCodedIndex) Marshal(w io.Writer) (uint64, error) {
 
 func (m *multiWidthCodedIndex) Unmarshal(r io.Reader) error {
 	if err := binary.Read(r, binary.LittleEndian, &m.code); err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
 		return err
 	}
 	return m.multiWidthIndex.Unmarshal(r)
@@ -93,14 +98,34 @@ func (m *MultihashIndexSorted) sortedMultihashCodes() []uint64 {
 }
 
 func (m *MultihashIndexSorted) Unmarshal(r io.Reader) error {
+	reader := internalio.ToByteReadSeeker(r)
 	var l int32
-	if err := binary.Read(r, binary.LittleEndian, &l); err != nil {
+	if err := binary.Read(reader, binary.LittleEndian, &l); err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
 		return err
+	}
+	sum, err := reader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return err
+	}
+	if int32(l) < 0 {
+		return errors.New("index too big; MultihashIndexSorted count is overflowing int32")
 	}
 	for i := 0; i < int(l); i++ {
 		mwci := newMultiWidthCodedIndex()
 		if err := mwci.Unmarshal(r); err != nil {
 			return err
+		}
+		n, err := reader.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return err
+		}
+		oldSum := sum
+		sum += n
+		if sum < oldSum {
+			return errors.New("index too big; MultihashIndexSorted len is overflowing int64")
 		}
 		m.put(mwci)
 	}

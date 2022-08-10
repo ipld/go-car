@@ -15,6 +15,10 @@ import (
 	cbor "github.com/whyrusleeping/cbor/go"
 )
 
+// This index is intended to be efficient for random-access, in-memory lookups
+// and is not intended to be an index type that is attached to a CARv2.
+// See flatten() for conversion of this data to a known, existing index type.
+
 var (
 	errUnsupported      = errors.New("not supported")
 	insertionIndexCodec = multicodec.Code(0x300003)
@@ -135,6 +139,20 @@ func (ii *insertionIndex) Unmarshal(r io.Reader) error {
 		ii.items.InsertNoReplace(newRecordDigest(rec))
 	}
 	return nil
+}
+
+func (ii *insertionIndex) ForEach(f func(multihash.Multihash, uint64) error) error {
+	var errr error
+	ii.items.AscendGreaterOrEqual(ii.items.Min(), func(i llrb.Item) bool {
+		r := i.(recordDigest).Record
+		err := f(r.Cid.Hash(), r.Offset)
+		if err != nil {
+			errr = err
+			return false
+		}
+		return true
+	})
+	return errr
 }
 
 func (ii *insertionIndex) Codec() multicodec.Code {

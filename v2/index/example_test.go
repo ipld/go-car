@@ -28,7 +28,11 @@ func ExampleReadFrom() {
 	}
 
 	// Read and unmarshall index within CARv2 file.
-	idx, err := index.ReadFrom(cr.IndexReader())
+	ir, err := cr.IndexReader()
+	if err != nil {
+		panic(err)
+	}
+	idx, err := index.ReadFrom(ir)
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +66,11 @@ func ExampleWriteTo() {
 	}()
 
 	// Read and unmarshall index within CARv2 file.
-	idx, err := index.ReadFrom(cr.IndexReader())
+	ir, err := cr.IndexReader()
+	if err != nil {
+		panic(err)
+	}
+	idx, err := index.ReadFrom(ir)
 	if err != nil {
 		panic(err)
 	}

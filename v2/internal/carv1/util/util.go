@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"io"
 
 	internalio "github.com/ipld/go-car/v2/internal/io"
@@ -10,13 +11,16 @@ import (
 	cid "github.com/ipfs/go-cid"
 )
 
+var ErrSectionTooLarge = errors.New("invalid section data, length of read beyond allowable maximum")
+var ErrHeaderTooLarge = errors.New("invalid header data, length of read beyond allowable maximum")
+
 type BytesReader interface {
 	io.Reader
 	io.ByteReader
 }
 
-func ReadNode(r io.Reader, zeroLenAsEOF bool) (cid.Cid, []byte, error) {
-	data, err := LdRead(r, zeroLenAsEOF)
+func ReadNode(r io.Reader, zeroLenAsEOF bool, maxReadBytes uint64) (cid.Cid, []byte, error) {
+	data, err := LdRead(r, zeroLenAsEOF, maxReadBytes)
 	if err != nil {
 		return cid.Cid{}, nil, err
 	}
@@ -61,7 +65,7 @@ func LdSize(d ...[]byte) uint64 {
 	return sum + uint64(s)
 }
 
-func LdRead(r io.Reader, zeroLenAsEOF bool) ([]byte, error) {
+func LdRead(r io.Reader, zeroLenAsEOF bool, maxReadBytes uint64) ([]byte, error) {
 	l, err := varint.ReadUvarint(internalio.ToByteReader(r))
 	if err != nil {
 		// If the length of bytes read is non-zero when the error is EOF then signal an unclean EOF.
@@ -71,6 +75,10 @@ func LdRead(r io.Reader, zeroLenAsEOF bool) ([]byte, error) {
 		return nil, err
 	} else if l == 0 && zeroLenAsEOF {
 		return nil, io.EOF
+	}
+
+	if l > maxReadBytes { // Don't OOM
+		return nil, ErrSectionTooLarge
 	}
 
 	buf := make([]byte, l)

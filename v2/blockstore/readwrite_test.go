@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -487,7 +488,9 @@ func TestBlockstoreResumption(t *testing.T) {
 	wantPayloadReader, err := carv1.NewCarReader(v1f)
 	require.NoError(t, err)
 
-	gotPayloadReader, err := carv1.NewCarReader(v2r.DataReader())
+	dr, err := v2r.DataReader()
+	require.NoError(t, err)
+	gotPayloadReader, err := carv1.NewCarReader(dr)
 	require.NoError(t, err)
 
 	require.Equal(t, wantPayloadReader.Header, gotPayloadReader.Header)
@@ -515,9 +518,13 @@ func TestBlockstoreResumption(t *testing.T) {
 	// Assert index in resumed from file is identical to index generated from the data payload portion of the generated CARv2 file.
 	_, err = v1f.Seek(0, io.SeekStart)
 	require.NoError(t, err)
-	gotIdx, err := index.ReadFrom(v2r.IndexReader())
+	ir, err := v2r.IndexReader()
 	require.NoError(t, err)
-	wantIdx, err := carv2.GenerateIndex(v2r.DataReader())
+	gotIdx, err := index.ReadFrom(ir)
+	require.NoError(t, err)
+	dr, err = v2r.DataReader()
+	require.NoError(t, err)
+	wantIdx, err := carv2.GenerateIndex(dr)
 	require.NoError(t, err)
 	require.Equal(t, wantIdx, gotIdx)
 }
@@ -828,14 +835,17 @@ func TestOpenReadWrite_WritesIdentityCIDsWhenOptionIsEnabled(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, r.Close()) })
 	require.True(t, r.Header.HasIndex())
 
-	ir := r.IndexReader()
+	ir, err := r.IndexReader()
+	require.NoError(t, err)
 	require.NotNil(t, ir)
 
 	gotIdx, err := index.ReadFrom(ir)
 	require.NoError(t, err)
 
 	// Determine expected offset as the length of header plus one
-	header, err := carv1.ReadHeader(r.DataReader())
+	dr, err := r.DataReader()
+	require.NoError(t, err)
+	header, err := carv1.ReadHeader(dr, carv1.DefaultMaxAllowedHeaderSize)
 	require.NoError(t, err)
 	object, err := cbor.DumpObject(header)
 	require.NoError(t, err)
@@ -918,7 +928,9 @@ func TestReadWrite_ReWritingCARv1WithIdentityCidIsIdenticalToOriginalWithOptions
 	// Note, we hash instead of comparing bytes to avoid excessive memory usage when sample CARv1 is large.
 
 	hasher := sha512.New()
-	gotWritten, err := io.Copy(hasher, v2r.DataReader())
+	dr, err := v2r.DataReader()
+	require.NoError(t, err)
+	gotWritten, err := io.Copy(hasher, dr)
 	require.NoError(t, err)
 	gotSum := hasher.Sum(nil)
 
@@ -931,4 +943,88 @@ func TestReadWrite_ReWritingCARv1WithIdentityCidIsIdenticalToOriginalWithOptions
 
 	require.Equal(t, wantWritten, gotWritten)
 	require.Equal(t, wantSum, gotSum)
+}
+
+func TestReadWriteOpenFile(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	dir := t.TempDir() // auto cleanup
+	f, err := ioutil.TempFile(dir, "")
+	require.NoError(t, err)
+
+	root := blocks.NewBlock([]byte("foo"))
+
+	bs, err := blockstore.OpenReadWriteFile(f, []cid.Cid{root.Cid()})
+	require.NoError(t, err)
+
+	err = bs.Put(ctx, root)
+	require.NoError(t, err)
+
+	roots, err := bs.Roots()
+	require.NoError(t, err)
+	_, err = bs.Has(ctx, roots[0])
+	require.NoError(t, err)
+	_, err = bs.Get(ctx, roots[0])
+	require.NoError(t, err)
+	_, err = bs.GetSize(ctx, roots[0])
+	require.NoError(t, err)
+
+	err = bs.Finalize()
+	require.NoError(t, err)
+
+	_, err = f.Seek(0, 0)
+	require.NoError(t, err) // file should not be closed, let the caller do it
+
+	err = f.Close()
+	require.NoError(t, err)
+}
+
+func TestBlockstore_IdentityCidWithEmptyDataIsIndexed(t *testing.T) {
+	p := path.Join(t.TempDir(), "car-id-cid-empty.carv2")
+	var noData []byte
+
+	mh, err := multihash.Sum(noData, multihash.IDENTITY, -1)
+	require.NoError(t, err)
+	w, err := blockstore.OpenReadWrite(p, nil, carv2.StoreIdentityCIDs(true))
+	require.NoError(t, err)
+
+	blk, err := blocks.NewBlockWithCid(noData, cid.NewCidV1(cid.Raw, mh))
+	require.NoError(t, err)
+
+	err = w.Put(context.TODO(), blk)
+	require.NoError(t, err)
+	require.NoError(t, w.Finalize())
+
+	r, err := carv2.OpenReader(p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.Close()) }()
+
+	dr, err := r.DataReader()
+	require.NoError(t, err)
+	header, err := carv1.ReadHeader(dr, carv1.DefaultMaxAllowedHeaderSize)
+	require.NoError(t, err)
+	wantOffset, err := carv1.HeaderSize(header)
+	require.NoError(t, err)
+
+	ir, err := r.IndexReader()
+	require.NoError(t, err)
+	idx, err := index.ReadFrom(ir)
+	require.NoError(t, err)
+
+	itidx, ok := idx.(index.IterableIndex)
+	require.True(t, ok)
+	var count int
+	err = itidx.ForEach(func(m multihash.Multihash, u uint64) error {
+		dm, err := multihash.Decode(m)
+		require.NoError(t, err)
+		require.Equal(t, multicodec.Identity, multicodec.Code(dm.Code))
+		require.Equal(t, 0, dm.Length)
+		require.Empty(t, dm.Digest)
+		require.Equal(t, wantOffset, u)
+		count++
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
 }
