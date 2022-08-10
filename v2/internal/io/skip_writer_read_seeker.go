@@ -25,6 +25,7 @@ type SkipWriterReaderSeeker struct {
 type ReWriter func(ctx context.Context, skip uint64, w io.Writer) (uint64, error)
 
 var _ io.ReadSeeker = (*SkipWriterReaderSeeker)(nil)
+var _ io.Closer = (*SkipWriterReaderSeeker)(nil)
 
 // NewSkipWriterReaderSeeker creates an io.ReadSeeker around a ReWriter.
 func NewSkipWriterReaderSeeker(ctx context.Context, size uint64, cons ReWriter) *SkipWriterReaderSeeker {
@@ -37,7 +38,7 @@ func NewSkipWriterReaderSeeker(ctx context.Context, size uint64, cons ReWriter) 
 }
 
 // Note: not threadsafe
-func (c *SkipWriterReaderSeeker) Read(p []byte) (n int, err error) {
+func (c *SkipWriterReaderSeeker) Read(p []byte) (int, error) {
 	// Check if there's already a write in progress
 	if c.reader == nil {
 		// No write in progress, start a new write from the current offset
@@ -90,19 +91,25 @@ func (c *SkipWriterReaderSeeker) Seek(offset int64, whence int) (int64, error) {
 	// Cancel any ongoing write and wait for it to complete
 	// TODO: if we're fast-forwarding with 'SeekCurrent', we may be able to read from the current reader instead.
 	if c.reader != nil {
-		c.writeCancel()
-
-		// Seek and Read should not be called concurrently so this is safe
-		c.reader.Close()
-
-		select {
-		case <-c.parentCtx.Done():
-			return 0, c.parentCtx.Err()
-		case <-c.writeComplete:
-		}
-
+		err := c.Close()
 		c.reader = nil
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	return int64(c.offset), nil
+}
+
+func (c *SkipWriterReaderSeeker) Close() error {
+	c.writeCancel()
+	// Seek and Read should not be called concurrently so this is safe
+	c.reader.Close()
+
+	select {
+	case <-c.parentCtx.Done():
+		return c.parentCtx.Err()
+	case <-c.writeComplete:
+	}
+	return nil
 }
