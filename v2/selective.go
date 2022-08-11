@@ -50,6 +50,20 @@ func WithDataPayloadSize(size uint64) Option {
 	}
 }
 
+// WithTraversalResumerPathState provides a custom TraversalResumerPathState
+// that can be reused between selective CAR creations where traversals may need
+// to be resumed at arbitrary points within the DAG.
+//
+// A TraversalResumerPathState shared across multiple traversals using the same
+// selector and DAG will yield the same state. This allows us to resume at
+// arbitrary points within in the DAG and load the minimal additional blocks
+// required to resume the traversal at that point.
+func WithTraversalResumerPathState(pathState resumetraversal.TraversalResumerPathState) Option {
+	return func(o *Options) {
+		o.TraversalResumerPathState = pathState
+	}
+}
+
 // NewSelectiveWriter walks through the proposed dag traversal to learn its total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
 func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
@@ -321,7 +335,11 @@ func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Opt
 	}
 
 	ls.TrustedStorage = true
-	resumer, err := resumetraversal.WithTraversingLinksystem(&progress)
+	pathState := opts.TraversalResumerPathState
+	if pathState == nil {
+		pathState = resumetraversal.NewTraversalResumerPathState()
+	}
+	resumer, err := resumetraversal.WithTraversingLinksystem(&progress, pathState)
 	if err != nil {
 		return err
 	}
