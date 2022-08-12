@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 
 	"github.com/ipld/go-car/v2/internal/loader"
 	"github.com/ipld/go-ipld-prime"
@@ -39,10 +40,10 @@ type PathState interface {
 	GetOffsetAfter(root datamodel.Path) (uint64, error)
 }
 
-type pathNode struct {
+type pathState struct {
 	link     datamodel.Link
 	offset   uint64
-	children map[datamodel.PathSegment]*pathNode
+	children map[datamodel.PathSegment]*pathState
 }
 
 // NewPathState creates a new PathState.
@@ -50,29 +51,44 @@ type pathNode struct {
 // Note that the PathState returned by this factory is not
 // thread-safe.
 func NewPathState() PathState {
-	return newPath(nil, 0)
+	return &pathState{children: make(map[datamodel.PathSegment]*pathState)}
 }
 
-func newPath(link datamodel.Link, at uint64) *pathNode {
-	return &pathNode{
-		link:     link,
-		offset:   at,
-		children: make(map[datamodel.PathSegment]*pathNode),
+func (pn *pathState) AddPath(p []datamodel.PathSegment, link datamodel.Link, atOffset uint64) {
+	if len(p) == 0 { // root path
+		pn.link = link
+		pn.offset = atOffset
+	} else {
+		pn.addPathRecursive(p, link, atOffset)
 	}
 }
 
-func (pn pathNode) AddPath(p []datamodel.PathSegment, link datamodel.Link, atOffset uint64) {
+func (pn *pathState) addPathRecursive(p []datamodel.PathSegment, link datamodel.Link, atOffset uint64) {
 	if len(p) == 0 {
 		return
 	}
 	if _, ok := pn.children[p[0]]; !ok {
-		child := newPath(link, atOffset)
+		child := NewPathState().(*pathState)
+		child.link = link
+		child.offset = atOffset
 		pn.children[p[0]] = child
 	}
-	pn.children[p[0]].AddPath(p[1:], link, atOffset)
+	pn.children[p[0]].addPathRecursive(p[1:], link, atOffset)
 }
 
-func (pn pathNode) allLinks() []datamodel.Link {
+func (pn pathState) DebugPrint(indent string) {
+	if pn.link == nil {
+		fmt.Fprintf(os.Stderr, "%sRoot: %d\n", indent, pn.offset)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s%s: %d\n", indent, pn.link, pn.offset)
+	}
+	for ps, ch := range pn.children {
+		fmt.Fprintf(os.Stderr, "%s%s ->\n", indent, ps)
+		ch.DebugPrint(fmt.Sprintf("%s\t", indent))
+	}
+}
+
+func (pn pathState) allLinks() []datamodel.Link {
 	if len(pn.children) == 0 {
 		return []datamodel.Link{pn.link}
 	}
@@ -87,7 +103,7 @@ func (pn pathNode) allLinks() []datamodel.Link {
 }
 
 // getPaths returns reconstructed paths in the tree rooted at 'root'
-func (pn pathNode) GetLinks(root datamodel.Path) []datamodel.Link {
+func (pn pathState) GetLinks(root datamodel.Path) []datamodel.Link {
 	segs := root.Segments()
 	switch len(segs) {
 	case 0:
@@ -115,7 +131,7 @@ func (pn pathNode) GetLinks(root datamodel.Path) []datamodel.Link {
 
 var errInvalid = fmt.Errorf("invalid path")
 
-func (pn pathNode) GetOffsetAfter(root datamodel.Path) (uint64, error) {
+func (pn pathState) GetOffsetAfter(root datamodel.Path) (uint64, error) {
 	// we look for offset of next sibling.
 	// if no next sibling recurse up the path segments until we find a next sibling.
 	segs := root.Segments()
@@ -137,7 +153,7 @@ func (pn pathNode) GetOffsetAfter(root datamodel.Path) (uint64, error) {
 	}
 	// find our next sibling
 	var next uint64 = math.MaxUint64
-	var nc *pathNode
+	var nc *pathState
 	for _, v := range pn.children {
 		if v.offset > closest && v.offset < next {
 			next = v.offset
@@ -242,19 +258,26 @@ func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Read
 			}
 		}
 	}
+
 	if ts.rewindOffsetTarget != 0 {
 		links := ts.pathTree.GetLinks(lc.LinkPath)
-		for _, l := range links {
-			ts.progress.SeenLinks[l] = struct{}{}
+		if len(links) == 0 { // we've not seen this before, must be the first time here
+			ts.pathTree.AddPath(lc.LinkPath.Segments(), l, ts.lsCounter.Size())
+		} else {
+			for _, l := range links {
+				ts.progress.SeenLinks[l] = struct{}{}
+			}
+			var err error
+			ts.lsCounter.TotalRead, err = ts.pathTree.GetOffsetAfter(lc.LinkPath)
+			if err == errInvalid {
+				ts.lsCounter.TotalRead = ts.pendingBlockStart
+			} else if err != nil {
+				return nil, err
+			}
+			if ts.rewindOffsetTarget >= ts.lsCounter.TotalRead {
+				return nil, traversal.SkipMe{}
+			}
 		}
-		var err error
-		ts.lsCounter.TotalRead, err = ts.pathTree.GetOffsetAfter(lc.LinkPath)
-		if err == errInvalid {
-			ts.lsCounter.TotalRead = ts.pendingBlockStart
-		} else if err != nil {
-			return nil, err
-		}
-		return nil, traversal.SkipMe{}
 	}
 
 	// descend.

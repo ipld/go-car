@@ -182,7 +182,7 @@ func TestWalkResumeByPathPartialWalk(t *testing.T) {
 
 func TestWalkResumeByOffset(t *testing.T) {
 	seen := 0
-	count := func(p traversal.Progress, n datamodel.Node, _ traversal.VisitReason) error {
+	count := func(p traversal.Progress, n datamodel.Node, r traversal.VisitReason) error {
 		seen++
 		return nil
 	}
@@ -219,7 +219,7 @@ func TestWalkResumeByOffset(t *testing.T) {
 	}
 
 	// resume from middle.
-	resumer.RewindToOffset(10)
+	resumer.RewindToOffset(17)
 	seen = 0
 	if err := p.WalkAdv(rootNode, s, count); err != nil {
 		t.Fatal(err)
@@ -228,8 +228,19 @@ func TestWalkResumeByOffset(t *testing.T) {
 		t.Fatalf("expected resumed traversal to visit 13 nodes, got %d", seen)
 	}
 
+	// resume from just before the middle.
+	resumer.RewindToOffset(127)
+	seen = 0
+	if err := p.WalkAdv(rootNode, s, count); err != nil {
+		t.Fatal(err)
+	}
+	// will not visit 'linkedString' or 'linkedMap' before linked list.
+	if seen != 13 {
+		t.Fatalf("expected resumed traversal to visit 13 nodes, got %d", seen)
+	}
+
 	// resume from middle.
-	resumer.RewindToOffset(50)
+	resumer.RewindToOffset(128)
 	seen = 0
 	if err := p.WalkAdv(rootNode, s, count); err != nil {
 		t.Fatal(err)

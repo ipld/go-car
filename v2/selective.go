@@ -64,29 +64,33 @@ func WithTraversalResumerPathState(pathState resumetraversal.PathState) Option {
 	}
 }
 
+func newTraversalCar(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts Options) *traversalCar {
+	pathState := opts.TraversalResumerPathState
+	if pathState == nil {
+		pathState = resumetraversal.NewPathState()
+	}
+	return &traversalCar{
+		ctx:       ctx,
+		opts:      opts,
+		ls:        ls,
+		root:      root,
+		selector:  selector,
+		size:      opts.DataPayloadSize,
+		pathState: pathState,
+	}
+}
+
 // NewSelectiveWriter walks through the proposed dag traversal to learn its total size in order to be able to
 // stream out a car to a writer in the expected traversal order in one go.
 func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (Writer, error) {
 	conf := ApplyOptions(opts...)
+	tc := newTraversalCar(ctx, ls, root, selector, conf)
+
 	if conf.DataPayloadSize != 0 {
-		return &traversalCar{
-			size:     conf.DataPayloadSize,
-			ctx:      ctx,
-			root:     root,
-			selector: selector,
-			ls:       ls,
-			opts:     ApplyOptions(opts...),
-		}, nil
+		return tc, nil
 	}
-	tc := traversalCar{
-		//size:     headSize + cntr.Size(),
-		ctx:      ctx,
-		root:     root,
-		selector: selector,
-		ls:       ls,
-		opts:     ApplyOptions(opts...),
-	}
-	if err := tc.setup(ctx, ls, ApplyOptions(opts...)); err != nil {
+
+	if err := tc.setup(ctx, ls, conf.SkipOffset, ApplyOptions(opts...)); err != nil {
 		return nil, err
 	}
 
@@ -99,21 +103,15 @@ func NewSelectiveWriter(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, 
 		return nil, err
 	}
 	tc.size = headSize + tc.resumer.Position()
-	return &tc, nil
+
+	return tc, nil
 }
 
 // TraverseToFile writes a car file matching a given root and selector to the
 // path at `destination` using one read of each block.
 func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, destination string, opts ...Option) error {
 	conf := ApplyOptions(opts...)
-	tc := traversalCar{
-		size:     conf.DataPayloadSize,
-		ctx:      ctx,
-		root:     root,
-		selector: selector,
-		ls:       ls,
-		opts:     conf,
-	}
+	tc := newTraversalCar(ctx, ls, root, selector, conf)
 
 	fp, err := os.Create(destination)
 	if err != nil {
@@ -143,15 +141,7 @@ func TraverseToFile(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, sele
 func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, writer io.Writer, opts ...Option) (uint64, error) {
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
-	tc := traversalCar{
-		size:     conf.DataPayloadSize,
-		ctx:      ctx,
-		root:     root,
-		selector: selector,
-		ls:       ls,
-		opts:     conf,
-	}
-
+	tc := newTraversalCar(ctx, ls, root, selector, conf)
 	len, _, err := tc.WriteV1(tc.ctx, conf.SkipOffset, writer)
 	return len, err
 }
@@ -160,14 +150,7 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 func NewCarV1StreamReader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
-	tc := traversalCar{
-		size:     conf.DataPayloadSize,
-		ctx:      ctx,
-		root:     root,
-		selector: selector,
-		ls:       ls,
-		opts:     conf,
-	}
+	tc := newTraversalCar(ctx, ls, root, selector, conf)
 	rwf := func(ctx context.Context, offset uint64, writer io.Writer) (uint64, error) {
 		s, _, err := tc.WriteV1(ctx, offset, writer)
 		return s, err
@@ -184,14 +167,16 @@ type Writer interface {
 var _ Writer = (*traversalCar)(nil)
 
 type traversalCar struct {
-	size     uint64
-	ctx      context.Context
-	root     cid.Cid
-	selector ipld.Node
-	ls       *ipld.LinkSystem
-	opts     Options
-	progress *traversal.Progress
-	resumer  resumetraversal.TraverseResumer
+	size      uint64
+	ctx       context.Context
+	root      cid.Cid
+	selector  ipld.Node
+	ls        *ipld.LinkSystem
+	opts      Options
+	progress  *traversal.Progress
+	resumer   resumetraversal.TraverseResumer
+	pathState resumetraversal.PathState
+	skip      uint64
 }
 
 func (tc *traversalCar) WriteTo(w io.Writer) (int64, error) {
@@ -289,9 +274,9 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 		skip -= v1Size
 	}
 
-	// write the block.
-	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, skip, tc.opts.IndexCodec)
-	if err = tc.setup(ctx, &wls, tc.opts); err != nil {
+	// write the block
+	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, tc.pathState, v1Size, skip, tc.opts.IndexCodec)
+	if err = tc.setup(ctx, &wls, skip, tc.opts); err != nil {
 		return v1Size, nil, err
 	}
 	err = tc.traverse(tc.root, tc.selector)
@@ -311,7 +296,7 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 	return v1Size, idx, err
 }
 
-func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Options) error {
+func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, skip uint64, opts Options) error {
 	chooser := func(_ ipld.Link, _ linking.LinkContext) (ipld.NodePrototype, error) {
 		return basicnode.Prototype.Any, nil
 	}
@@ -335,16 +320,13 @@ func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Opt
 	}
 
 	ls.TrustedStorage = true
-	pathState := opts.TraversalResumerPathState
-	if pathState == nil {
-		pathState = resumetraversal.NewPathState()
-	}
-	resumer, err := resumetraversal.WithTraversingLinksystem(&progress, pathState)
+	resumer, err := resumetraversal.WithTraversingLinksystem(&progress, tc.pathState)
 	if err != nil {
 		return err
 	}
 	tc.progress = &progress
 	tc.resumer = resumer
+	tc.skip = skip
 	return nil
 }
 
@@ -360,7 +342,10 @@ func (tc *traversalCar) traverse(root cid.Cid, s ipld.Node) error {
 	}
 	rootNode, err := tc.progress.Cfg.LinkSystem.Load(ipld.LinkContext{}, lnk, rp)
 	if err != nil {
-		return fmt.Errorf("root blk load failed: %s", err)
+		return fmt.Errorf("root block load failed: %s", err)
+	}
+	if tc.skip > 0 {
+		tc.resumer.RewindToOffset(tc.skip)
 	}
 	err = tc.progress.WalkMatching(rootNode, sel, func(_ traversal.Progress, node ipld.Node) error {
 		if lbn, ok := node.(datamodel.LargeBytesNode); ok {
