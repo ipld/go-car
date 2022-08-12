@@ -44,6 +44,11 @@ func MaxTraversalLinks(MaxTraversalLinks uint64) Option {
 }
 
 // WithDataPayloadSize sets the expected v1 size of the car being written if it is known in advance.
+// This is required if NewCarV1StreamReader() is used and a Seek() operation needs seek back from
+// SeekEnd (i.e. if we don't know where the end is, we can't figure out how far that is from the start).
+// It can also be used to validate the expected size of a CAR's data payload if it's known in advance. In
+// that case, a selective CAR creation operation will return an ErrSizeMismatch if the actual size doesn't
+// match the expected set with this option.
 func WithDataPayloadSize(size uint64) Option {
 	return func(sco *Options) {
 		sco.DataPayloadSize = size
@@ -142,8 +147,12 @@ func TraverseV1(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector
 	return len, err
 }
 
-// NewCarV1StreamReader creates an io.ReadSeeker that can be used to copy out the carv1 contents of a car.
-func NewCarV1StreamReader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
+// NewSelectiveV1Reader creates an io.ReadSeeker that can be used to stream a
+// CARv1 given a LinkSystem, root CID and a selector. If Seek() is used, the
+// output will only be given from that point in the resulting CAR. Where the
+// size of the CAR is known ahead of time and provided via the
+// WithDataPayloadSize option, seeking from the end of the CAR is permissible.
+func NewSelectiveV1Reader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid, selector ipld.Node, opts ...Option) (io.ReadSeeker, error) {
 	opts = append(opts, WithoutIndex())
 	conf := ApplyOptions(opts...)
 	tc := traversalCar{
@@ -155,6 +164,11 @@ func NewCarV1StreamReader(ctx context.Context, ls *ipld.LinkSystem, root cid.Cid
 		opts:     conf,
 	}
 	rwf := func(ctx context.Context, offset uint64, writer io.Writer) (uint64, error) {
+		// it's only at this point we have the `offset` to start writing at since the user of the
+		// ReadSeeker will (may) have called Seek() and we've worked out where in the CAR
+		// that is as an offset. Now we can start writing the CARv1 data, which will be passed
+		// on to the ReadSeeker.
+		// Note that we're inside a goroutine here
 		s, _, err := tc.WriteV1(ctx, offset, writer)
 		return s, err
 	}
@@ -275,7 +289,7 @@ func (tc *traversalCar) WriteV1(ctx context.Context, skip uint64, w io.Writer) (
 		skip -= v1Size
 	}
 
-	// write the block.
+	// write the blocks
 	wls, writer := loader.TeeingLinkSystem(*tc.ls, w, v1Size, skip, tc.opts.IndexCodec)
 	if err = tc.setup(ctx, &wls, tc.opts); err != nil {
 		return v1Size, nil, err

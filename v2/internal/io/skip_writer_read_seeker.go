@@ -42,7 +42,7 @@ func (c *SkipWriterReaderSeeker) Read(p []byte) (int, error) {
 	// Check if there's already a write in progress
 	if c.reader == nil {
 		// No write in progress, start a new write from the current offset
-		// in a go routine
+		// in a go routine and feed it back to the caller via a pipe
 		writeCtx, writeCancel := context.WithCancel(c.parentCtx)
 		c.writeCancel = writeCancel
 		pr, pw := io.Pipe()
