@@ -7,10 +7,18 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-varint"
 )
+
+// copy of traversal.PathState
+type PathState interface {
+	AddPath(path []datamodel.PathSegment, link datamodel.Link, atOffset uint64)
+	GetLinks(root datamodel.Path) []datamodel.Link
+	GetOffsetAfter(root datamodel.Path) (uint64, error)
+}
 
 // indexingWriter wraps an io.Writer with metadata of the index of the car written to it.
 type indexingWriter struct {
@@ -54,7 +62,7 @@ var _ IndexTracker = (*indexingWriter)(nil)
 type writingReader struct {
 	r   io.Reader
 	buf []byte
-	cid string
+	cid cid.Cid
 	wo  *indexingWriter
 }
 
@@ -68,7 +76,7 @@ func (w *writingReader) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		// write the cid
-		if _, err := buf.Write([]byte(w.cid)); err != nil {
+		if _, err := buf.Write(w.cid.Bytes()); err != nil {
 			return 0, err
 		}
 		// write the block
@@ -76,15 +84,15 @@ func (w *writingReader) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		sizeBytes := varint.ToUvarint(uint64(n) + uint64(len(w.cid)))
+		sizeBytes := varint.ToUvarint(uint64(n) + uint64(len(w.cid.Bytes())))
 		writeBuf := buf.Bytes()[varint.MaxLenUvarint63-len(sizeBytes):]
-		w.buf = buf.Bytes()[varint.MaxLenUvarint63+len(w.cid):]
+		w.buf = buf.Bytes()[varint.MaxLenUvarint63+len(w.cid.Bytes()):]
 		_ = copy(writeBuf[:], sizeBytes)
 
-		size := len(writeBuf)
+		size := uint64(len(writeBuf))
 		if w.wo.toSkip > 0 {
-			if w.wo.toSkip >= uint64(len(writeBuf)) {
-				w.wo.toSkip -= uint64(len(writeBuf))
+			if w.wo.toSkip >= size {
+				w.wo.toSkip -= size
 				writeBuf = []byte{}
 			} else {
 				writeBuf = writeBuf[w.wo.toSkip:]
@@ -92,18 +100,19 @@ func (w *writingReader) Read(p []byte) (int, error) {
 			}
 		}
 
-		if _, err := bytes.NewBuffer(writeBuf).WriteTo(w.wo.w); err != nil {
-			return 0, err
+		// we haven't indexed this cid in this session
+		if _, ok := w.wo.rcrds[w.cid]; !ok {
+			if _, err := bytes.NewBuffer(writeBuf).WriteTo(w.wo.w); err != nil {
+				return 0, err
+			}
+
+			w.wo.rcrds[w.cid] = index.Record{
+				Cid:    w.cid,
+				Offset: w.wo.size,
+			}
 		}
-		_, c, err := cid.CidFromBytes([]byte(w.cid))
-		if err != nil {
-			return 0, err
-		}
-		w.wo.rcrds[c] = index.Record{
-			Cid:    c,
-			Offset: w.wo.size,
-		}
-		w.wo.size += uint64(size)
+
+		w.wo.size += size
 		w.wo = nil
 	}
 
@@ -125,7 +134,15 @@ func (w *writingReader) Read(p []byte) (int, error) {
 // The `initialOffset` is used to calculate the offsets recorded for the index, and will be
 //   included in the `.Size()` of the IndexTracker.
 // An indexCodec of `index.CarIndexNoIndex` can be used to not track these offsets.
-func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, skip uint64, indexCodec multicodec.Code) (ipld.LinkSystem, IndexTracker) {
+func TeeingLinkSystem(
+	ls ipld.LinkSystem,
+	w io.Writer,
+	pathState PathState,
+	initialOffset uint64,
+	skip uint64,
+	indexCodec multicodec.Code,
+) (ipld.LinkSystem, IndexTracker) {
+
 	iw := indexingWriter{
 		w:      w,
 		size:   initialOffset,
@@ -141,17 +158,18 @@ func TeeingLinkSystem(ls ipld.LinkSystem, w io.Writer, initialOffset uint64, ski
 			return nil, err
 		}
 
-		// if we've already read this cid in this session, don't re-write it.
-		if _, ok := iw.rcrds[c]; ok {
-			return ls.StorageReadOpener(lc, l)
-		}
-
 		r, err := ls.StorageReadOpener(lc, l)
 		if err != nil {
 			return nil, err
 		}
 
-		return &writingReader{r, nil, l.Binary(), &iw}, nil
+		/*
+			offset, err := pathState.GetOffsetAfter(lc.LinkPath)
+			if err != nil {
+				//return nil, err
+			}
+		*/
+		return &writingReader{r, nil, c, &iw}, nil
 	}
 	return tls, &iw
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 
 	"github.com/ipld/go-car/v2/internal/loader"
 	"github.com/ipld/go-ipld-prime"
@@ -17,32 +18,77 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal"
 )
 
-type pathNode struct {
-	link     datamodel.Link
-	offset   uint64
-	children map[datamodel.PathSegment]*pathNode
+// TraverseResumer allows resuming a progress from a previously encountered path
+// in the selector.
+type TraverseResumer interface {
+	RewindToPath(from datamodel.Path) error
+	RewindToOffset(offset uint64) error
+	Position() uint64
 }
 
-func newPath(link datamodel.Link, at uint64) *pathNode {
-	return &pathNode{
-		link:     link,
-		offset:   at,
-		children: make(map[datamodel.PathSegment]*pathNode),
+// PathState tracks a traversal state for the purpose of
+// building a CAR. For each block in the CAR it tracks the path to that block,
+// the Link of the block and where in the CAR the block is located.
+//
+// A PathState shared across multiple traversals using the same
+// selector and DAG will yield the same state. This allows us to resume at
+// arbitrary points within in the DAG and load the minimal additional blocks
+// required to resume the traversal at that point.
+type PathState interface {
+	AddPath(path []datamodel.PathSegment, link datamodel.Link, atOffset uint64)
+	GetLinks(root datamodel.Path) []datamodel.Link
+	GetOffsetAfter(root datamodel.Path) (uint64, error)
+}
+
+type pathState struct {
+	link     datamodel.Link
+	offset   uint64
+	children map[datamodel.PathSegment]*pathState
+}
+
+// NewPathState creates a new PathState.
+//
+// Note that the PathState returned by this factory is not
+// thread-safe.
+func NewPathState() PathState {
+	return &pathState{children: make(map[datamodel.PathSegment]*pathState)}
+}
+
+func (pn *pathState) AddPath(p []datamodel.PathSegment, link datamodel.Link, atOffset uint64) {
+	if len(p) == 0 { // root path
+		pn.link = link
+		pn.offset = atOffset
+	} else {
+		pn.addPathRecursive(p, link, atOffset)
 	}
 }
 
-func (pn pathNode) addPath(p []datamodel.PathSegment, link datamodel.Link, at uint64) {
+func (pn *pathState) addPathRecursive(p []datamodel.PathSegment, link datamodel.Link, atOffset uint64) {
 	if len(p) == 0 {
 		return
 	}
 	if _, ok := pn.children[p[0]]; !ok {
-		child := newPath(link, at)
+		child := NewPathState().(*pathState)
+		child.link = link
+		child.offset = atOffset
 		pn.children[p[0]] = child
 	}
-	pn.children[p[0]].addPath(p[1:], link, at)
+	pn.children[p[0]].addPathRecursive(p[1:], link, atOffset)
 }
 
-func (pn pathNode) allLinks() []datamodel.Link {
+func (pn pathState) DebugPrint(indent string) {
+	if pn.link == nil {
+		fmt.Fprintf(os.Stderr, "%sRoot: %d\n", indent, pn.offset)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s%s: %d\n", indent, pn.link, pn.offset)
+	}
+	for ps, ch := range pn.children {
+		fmt.Fprintf(os.Stderr, "%s%s ->\n", indent, ps)
+		ch.DebugPrint(fmt.Sprintf("%s\t", indent))
+	}
+}
+
+func (pn pathState) allLinks() []datamodel.Link {
 	if len(pn.children) == 0 {
 		return []datamodel.Link{pn.link}
 	}
@@ -57,7 +103,7 @@ func (pn pathNode) allLinks() []datamodel.Link {
 }
 
 // getPaths returns reconstructed paths in the tree rooted at 'root'
-func (pn pathNode) getLinks(root datamodel.Path) []datamodel.Link {
+func (pn pathState) GetLinks(root datamodel.Path) []datamodel.Link {
 	segs := root.Segments()
 	switch len(segs) {
 	case 0:
@@ -80,12 +126,12 @@ func (pn pathNode) getLinks(root datamodel.Path) []datamodel.Link {
 		// base case 2: not registered sub-path.
 		return []datamodel.Link{}
 	}
-	return pn.children[next].getLinks(datamodel.NewPathNocopy(segs[1:]))
+	return pn.children[next].GetLinks(datamodel.NewPathNocopy(segs[1:]))
 }
 
 var errInvalid = fmt.Errorf("invalid path")
 
-func (pn pathNode) offsetAfter(root datamodel.Path) (uint64, error) {
+func (pn pathState) GetOffsetAfter(root datamodel.Path) (uint64, error) {
 	// we look for offset of next sibling.
 	// if no next sibling recurse up the path segments until we find a next sibling.
 	segs := root.Segments()
@@ -100,14 +146,14 @@ func (pn pathNode) offsetAfter(root datamodel.Path) (uint64, error) {
 	closest := chld.offset
 	// try recursive path
 	if len(segs) > 1 {
-		co, err := chld.offsetAfter(datamodel.NewPathNocopy(segs[1:]))
+		co, err := chld.GetOffsetAfter(datamodel.NewPathNocopy(segs[1:]))
 		if err == nil {
 			return co, err
 		}
 	}
 	// find our next sibling
 	var next uint64 = math.MaxUint64
-	var nc *pathNode
+	var nc *pathState
 	for _, v := range pn.children {
 		if v.offset > closest && v.offset < next {
 			next = v.offset
@@ -121,24 +167,17 @@ func (pn pathNode) offsetAfter(root datamodel.Path) (uint64, error) {
 	return 0, errInvalid
 }
 
-// TraverseResumer allows resuming a progress from a previously encountered path in the selector.
-type TraverseResumer interface {
-	RewindToPath(from datamodel.Path) error
-	RewindToOffset(offset uint64) error
-	Position() uint64
-}
-
 type traversalState struct {
 	wrappedLinksystem  *linking.LinkSystem
 	lsCounter          *loader.Counter
-	blockNumber        int
-	pathOrder          map[int]datamodel.Path
-	pathTree           *pathNode
+	pathTree           PathState
 	rewindPathTarget   *datamodel.Path
 	rewindOffsetTarget uint64
 	pendingBlockStart  uint64 // on rewinds, we store where the counter was in order to know the length of the last read block.
 	progress           *traversal.Progress
 }
+
+var _ TraverseResumer = (*traversalState)(nil)
 
 func (ts *traversalState) RewindToPath(from datamodel.Path) error {
 	if ts.progress == nil {
@@ -146,10 +185,10 @@ func (ts *traversalState) RewindToPath(from datamodel.Path) error {
 	}
 	// reset progress and traverse until target.
 	ts.progress.SeenLinks = make(map[datamodel.Link]struct{})
-	ts.blockNumber = 0
 	ts.pendingBlockStart = ts.lsCounter.Size()
 	ts.lsCounter.TotalRead = 0
 	ts.rewindPathTarget = &from
+	ts.rewindOffsetTarget = 0
 	return nil
 }
 
@@ -163,10 +202,10 @@ func (ts *traversalState) RewindToOffset(offset uint64) error {
 	}
 	// reset progress and traverse until target.
 	ts.progress.SeenLinks = make(map[datamodel.Link]struct{})
-	ts.blockNumber = 0
 	ts.pendingBlockStart = ts.lsCounter.Size()
 	ts.lsCounter.TotalRead = 0
 	ts.rewindOffsetTarget = offset
+	ts.rewindPathTarget = nil
 	return nil
 }
 
@@ -177,9 +216,7 @@ func (ts *traversalState) Position() uint64 {
 func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
 	// when not in replay mode, we track metadata
 	if ts.rewindPathTarget == nil && ts.rewindOffsetTarget == 0 {
-		ts.pathOrder[ts.blockNumber] = lc.LinkPath
-		ts.pathTree.addPath(lc.LinkPath.Segments(), l, ts.lsCounter.Size())
-		ts.blockNumber++
+		ts.pathTree.AddPath(lc.LinkPath.Segments(), l, ts.lsCounter.Size())
 		return ts.wrappedLinksystem.StorageReadOpener(lc, l)
 	}
 
@@ -205,12 +242,12 @@ func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Read
 				break
 			}
 			if targetSegments[i].String() != s.String() {
-				links := ts.pathTree.getLinks(datamodel.NewPathNocopy(seg[0 : i+1]))
+				links := ts.pathTree.GetLinks(datamodel.NewPathNocopy(seg[0 : i+1]))
 				for _, l := range links {
 					ts.progress.SeenLinks[l] = struct{}{}
 				}
 				var err error
-				ts.lsCounter.TotalRead, err = ts.pathTree.offsetAfter(datamodel.NewPathNocopy(seg[0 : i+1]))
+				ts.lsCounter.TotalRead, err = ts.pathTree.GetOffsetAfter(datamodel.NewPathNocopy(seg[0 : i+1]))
 				if err == errInvalid {
 					ts.lsCounter.TotalRead = ts.pendingBlockStart
 				} else if err != nil {
@@ -221,19 +258,26 @@ func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Read
 			}
 		}
 	}
+
 	if ts.rewindOffsetTarget != 0 {
-		links := ts.pathTree.getLinks(lc.LinkPath)
-		for _, l := range links {
-			ts.progress.SeenLinks[l] = struct{}{}
+		links := ts.pathTree.GetLinks(lc.LinkPath)
+		if len(links) == 0 { // we've not seen this before, must be the first time here
+			ts.pathTree.AddPath(lc.LinkPath.Segments(), l, ts.lsCounter.Size())
+		} else {
+			for _, l := range links {
+				ts.progress.SeenLinks[l] = struct{}{}
+			}
+			var err error
+			ts.lsCounter.TotalRead, err = ts.pathTree.GetOffsetAfter(lc.LinkPath)
+			if err == errInvalid {
+				ts.lsCounter.TotalRead = ts.pendingBlockStart
+			} else if err != nil {
+				return nil, err
+			}
+			if ts.rewindOffsetTarget >= ts.lsCounter.TotalRead {
+				return nil, traversal.SkipMe{}
+			}
 		}
-		var err error
-		ts.lsCounter.TotalRead, err = ts.pathTree.offsetAfter(lc.LinkPath)
-		if err == errInvalid {
-			ts.lsCounter.TotalRead = ts.pendingBlockStart
-		} else if err != nil {
-			return nil, err
-		}
-		return nil, traversal.SkipMe{}
 	}
 
 	// descend.
@@ -243,15 +287,14 @@ func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Read
 // WithTraversingLinksystem extends a progress for traversal such that it can
 // subsequently resume and perform subsets of the walk efficiently from
 // an arbitrary position within the selector traversal.
-func WithTraversingLinksystem(p *traversal.Progress) (TraverseResumer, error) {
-	wls, ctr := loader.CountingLinkSystem(p.Cfg.LinkSystem)
+func WithTraversingLinksystem(progress *traversal.Progress, pathState PathState) (TraverseResumer, error) {
+	wls, ctr := loader.CountingLinkSystem(progress.Cfg.LinkSystem)
 	ts := &traversalState{
 		wrappedLinksystem: &wls,
 		lsCounter:         ctr.(*loader.Counter),
-		pathOrder:         make(map[int]datamodel.Path),
-		pathTree:          newPath(nil, 0),
-		progress:          p,
+		pathTree:          pathState,
+		progress:          progress,
 	}
-	p.Cfg.LinkSystem.StorageReadOpener = ts.traverse
+	progress.Cfg.LinkSystem.StorageReadOpener = ts.traverse
 	return ts, nil
 }

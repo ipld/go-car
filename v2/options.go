@@ -8,6 +8,7 @@ import (
 	"github.com/multiformats/go-multicodec"
 
 	"github.com/ipld/go-car/v2/internal/carv1"
+	resumetraversal "github.com/ipld/go-car/v2/traversal"
 )
 
 // DefaultMaxIndexCidSize specifies the maximum size in byptes accepted as a section CID by CARv2 index.
@@ -62,6 +63,7 @@ type Options struct {
 	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
 	DataPayloadSize              uint64
 	SkipOffset                   uint64
+	TraversalResumerPathState    resumetraversal.PathState
 
 	MaxAllowedHeaderSize  uint64
 	MaxAllowedSectionSize uint64

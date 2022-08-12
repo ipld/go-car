@@ -15,6 +15,7 @@ import (
 	"github.com/ipfs/go-unixfsnode/data/builder"
 	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
+	"github.com/ipld/go-car/v2/traversal"
 	dagpb "github.com/ipld/go-codec-dagpb"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
@@ -154,24 +155,62 @@ func TestOffsetWrites(t *testing.T) {
 	_, rts, err := cid.CidFromBytes([]byte(rootCid.Binary()))
 	require.NoError(t, err)
 
+	pathState := traversal.NewPathState()
+
 	// get the full car buffer.
 	fullBuf := bytes.Buffer{}
-	_, err = car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &fullBuf)
+	_, err = car.TraverseV1(
+		context.Background(),
+		&ls,
+		rts,
+		selectorparse.CommonSelector_ExploreAllRecursively,
+		&fullBuf,
+		car.WithTraversalResumerPathState(pathState),
+	)
 	require.NoError(t, err)
 
-	for i := uint64(1); i < 1000; i += 1 {
-		buf := bytes.Buffer{}
+	// same again but with pathState cached
+	// TODO: test block load count
+	buf := bytes.Buffer{}
+	_, err = car.TraverseV1(
+		context.Background(),
+		&ls,
+		rts,
+		selectorparse.CommonSelector_ExploreAllRecursively,
+		&buf,
+		car.WithTraversalResumerPathState(pathState),
+	)
+	require.NoError(t, err)
+	require.Equal(t, fullBuf.Bytes(), buf.Bytes())
 
-		_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, car.WithSkipOffset(i))
-		require.NoError(t, err)
-		require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+	run1000 := func(opts ...car.Option) func(t *testing.T) {
+		return func(t *testing.T) {
+			for i := uint64(1); i < 1000; i += 1 {
+				buf := bytes.Buffer{}
+				o := append([]car.Option{car.WithSkipOffset(i)}, opts...)
+				_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, o...)
+				require.NoError(t, err)
+				require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+			}
+		}
 	}
 
-	for i := uint64(1000); i < 1000000; i += 1000 {
-		buf := bytes.Buffer{}
+	t.Run("first 1000 bytes, no cache", run1000())
+	// TODO: test block load count
+	t.Run("first 1000 bytes, with cache", run1000(car.WithTraversalResumerPathState(pathState)))
 
-		_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, car.WithSkipOffset(i))
-		require.NoError(t, err)
-		require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+	run1000000 := func(opts ...car.Option) func(t *testing.T) {
+		return func(t *testing.T) {
+			for i := uint64(1000); i < 1000000; i += 1000 {
+				buf := bytes.Buffer{}
+				_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, car.WithSkipOffset(i))
+				require.NoError(t, err)
+				require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+			}
+		}
 	}
+
+	t.Run("next 1000000 bytes, no cache", run1000000())
+	// TODO: test block load count
+	t.Run("next 1000000 bytes, with cache", run1000000(car.WithTraversalResumerPathState(pathState)))
 }
