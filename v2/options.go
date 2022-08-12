@@ -63,7 +63,7 @@ type Options struct {
 	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
 	DataPayloadSize              uint64
 	SkipOffset                   uint64
-	TraversalResumerPathState    resumetraversal.TraversalResumerPathState
+	TraversalResumerPathState    resumetraversal.PathState
 
 	MaxAllowedHeaderSize  uint64
 	MaxAllowedSectionSize uint64

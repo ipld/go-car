@@ -50,15 +50,15 @@ func WithDataPayloadSize(size uint64) Option {
 	}
 }
 
-// WithTraversalResumerPathState provides a custom TraversalResumerPathState
-// that can be reused between selective CAR creations where traversals may need
-// to be resumed at arbitrary points within the DAG.
+// WithTraversalResumerPathState provides a custom PathState that can be reused
+// between selective CAR creations where traversals may need to be resumed at
+// arbitrary points within the DAG.
 //
-// A TraversalResumerPathState shared across multiple traversals using the same
-// selector and DAG will yield the same state. This allows us to resume at
-// arbitrary points within in the DAG and load the minimal additional blocks
-// required to resume the traversal at that point.
-func WithTraversalResumerPathState(pathState resumetraversal.TraversalResumerPathState) Option {
+// A PathState shared across multiple traversals using the same selector and DAG
+// will yield the same state. This allows us to resume at arbitrary points
+// within in the DAG and load the minimal additional blocks required to resume
+// the traversal at that point.
+func WithTraversalResumerPathState(pathState resumetraversal.PathState) Option {
 	return func(o *Options) {
 		o.TraversalResumerPathState = pathState
 	}
@@ -337,7 +337,7 @@ func (tc *traversalCar) setup(ctx context.Context, ls *ipld.LinkSystem, opts Opt
 	ls.TrustedStorage = true
 	pathState := opts.TraversalResumerPathState
 	if pathState == nil {
-		pathState = resumetraversal.NewTraversalResumerPathState()
+		pathState = resumetraversal.NewPathState()
 	}
 	resumer, err := resumetraversal.WithTraversingLinksystem(&progress, pathState)
 	if err != nil {

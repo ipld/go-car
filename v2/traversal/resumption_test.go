@@ -89,7 +89,7 @@ func TestWalkResumeByPath(t *testing.T) {
 			LinkTargetNodePrototypeChooser: basicnode.Chooser,
 		},
 	}
-	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewTraversalResumerPathState())
+	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewPathState())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestWalkResumeByPathPartialWalk(t *testing.T) {
 			LinkTargetNodePrototypeChooser: basicnode.Chooser,
 		},
 	}
-	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewTraversalResumerPathState())
+	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewPathState())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestWalkResumeByOffset(t *testing.T) {
 			LinkTargetNodePrototypeChooser: basicnode.Chooser,
 		},
 	}
-	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewTraversalResumerPathState())
+	resumer, err := cartraversal.WithTraversingLinksystem(&p, cartraversal.NewPathState())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,15 +25,15 @@ type TraverseResumer interface {
 	Position() uint64
 }
 
-// TraversalResumerPathState tracks a traversal state for the purpose of
+// PathState tracks a traversal state for the purpose of
 // building a CAR. For each block in the CAR it tracks the path to that block,
 // the Link of the block and where in the CAR the block is located.
 //
-// A TraversalResumerPathState shared across multiple traversals using the same
+// A PathState shared across multiple traversals using the same
 // selector and DAG will yield the same state. This allows us to resume at
 // arbitrary points within in the DAG and load the minimal additional blocks
 // required to resume the traversal at that point.
-type TraversalResumerPathState interface {
+type PathState interface {
 	AddPath(path []datamodel.PathSegment, link datamodel.Link, atOffset uint64)
 	GetLinks(root datamodel.Path) []datamodel.Link
 	GetOffsetAfter(root datamodel.Path) (uint64, error)
@@ -45,11 +45,11 @@ type pathNode struct {
 	children map[datamodel.PathSegment]*pathNode
 }
 
-// NewTraversalResumerPathState creates a new TraversalResumerPathState.
+// NewPathState creates a new PathState.
 //
-// Note that the TraversalResumerPathState returned by this factory is not
+// Note that the PathState returned by this factory is not
 // thread-safe.
-func NewTraversalResumerPathState() TraversalResumerPathState {
+func NewPathState() PathState {
 	return newPath(nil, 0)
 }
 
@@ -154,7 +154,7 @@ func (pn pathNode) GetOffsetAfter(root datamodel.Path) (uint64, error) {
 type traversalState struct {
 	wrappedLinksystem  *linking.LinkSystem
 	lsCounter          *loader.Counter
-	pathTree           TraversalResumerPathState
+	pathTree           PathState
 	rewindPathTarget   *datamodel.Path
 	rewindOffsetTarget uint64
 	pendingBlockStart  uint64 // on rewinds, we store where the counter was in order to know the length of the last read block.
@@ -264,14 +264,14 @@ func (ts *traversalState) traverse(lc linking.LinkContext, l ipld.Link) (io.Read
 // WithTraversingLinksystem extends a progress for traversal such that it can
 // subsequently resume and perform subsets of the walk efficiently from
 // an arbitrary position within the selector traversal.
-func WithTraversingLinksystem(p *traversal.Progress, pathState TraversalResumerPathState) (TraverseResumer, error) {
-	wls, ctr := loader.CountingLinkSystem(p.Cfg.LinkSystem)
+func WithTraversingLinksystem(progress *traversal.Progress, pathState PathState) (TraverseResumer, error) {
+	wls, ctr := loader.CountingLinkSystem(progress.Cfg.LinkSystem)
 	ts := &traversalState{
 		wrappedLinksystem: &wls,
 		lsCounter:         ctr.(*loader.Counter),
 		pathTree:          pathState,
-		progress:          p,
+		progress:          progress,
 	}
-	p.Cfg.LinkSystem.StorageReadOpener = ts.traverse
+	progress.Cfg.LinkSystem.StorageReadOpener = ts.traverse
 	return ts, nil
 }
