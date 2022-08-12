@@ -51,15 +51,23 @@ type IndexTracker interface {
 
 var _ IndexTracker = (*indexingWriter)(nil)
 
+// writingReader is used on a per-block basis for the TeeingLinkSystem's StorageReadOpener, we use it
+// to intercept block reads and construct CAR section output for that block, passing that section data to
+// indexingWriter, while also passing the plain binary block data back to the LinkSystem caller (which
+// we expect to be a traversal operation).
+// Additionally, if we are performing a "skip" of initial bytes for this CAR, we track the byte count as we
+// construct the CAR section data and decide when and how much to write out to the indexingWriter.
+// Skip operations don't impact the downstream LinkSystem user (traversal), but they do impact what's
+// written out via the indexingWriter.
 type writingReader struct {
 	r   io.Reader
 	buf []byte
 	cid string
-	wo  *indexingWriter
+	iw  *indexingWriter
 }
 
 func (w *writingReader) Read(p []byte) (int, error) {
-	if w.wo != nil {
+	if w.iw != nil {
 		// build the buffer of size:cid:block if we don't have it yet.
 		buf := bytes.NewBuffer(nil)
 		// allocate space for size
@@ -76,38 +84,45 @@ func (w *writingReader) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+		// write the varint size prefix and trim the unneeded prefix padding we allocated
 		sizeBytes := varint.ToUvarint(uint64(n) + uint64(len(w.cid)))
 		writeBuf := buf.Bytes()[varint.MaxLenUvarint63-len(sizeBytes):]
 		w.buf = buf.Bytes()[varint.MaxLenUvarint63+len(w.cid):]
 		_ = copy(writeBuf[:], sizeBytes)
 
 		size := len(writeBuf)
-		if w.wo.toSkip > 0 {
-			if w.wo.toSkip >= uint64(len(writeBuf)) {
-				w.wo.toSkip -= uint64(len(writeBuf))
+		// indexingWriter manages state for a skip operation, but we have to mutate it here -
+		// if there are still bytes to skip, then we either need to skip over this whole block, or pass
+		// part of it on, and then update the toSkip state
+		if w.iw.toSkip > 0 {
+			if w.iw.toSkip >= uint64(len(writeBuf)) {
+				w.iw.toSkip -= uint64(len(writeBuf))
+				// will cause the WriteTo() below to be a noop, we need to skip this entire block
 				writeBuf = []byte{}
 			} else {
-				writeBuf = writeBuf[w.wo.toSkip:]
-				w.wo.toSkip = 0
+				writeBuf = writeBuf[w.iw.toSkip:]
+				w.iw.toSkip = 0
 			}
 		}
 
-		if _, err := bytes.NewBuffer(writeBuf).WriteTo(w.wo.w); err != nil {
+		if _, err := bytes.NewBuffer(writeBuf).WriteTo(w.iw.w); err != nil {
 			return 0, err
 		}
 		_, c, err := cid.CidFromBytes([]byte(w.cid))
 		if err != nil {
 			return 0, err
 		}
-		w.wo.rcrds[c] = index.Record{
+		w.iw.rcrds[c] = index.Record{
 			Cid:    c,
-			Offset: w.wo.size,
+			Offset: w.iw.size,
 		}
-		w.wo.size += uint64(size)
-		w.wo = nil
+		w.iw.size += uint64(size)
+		w.iw = nil
 	}
 
 	if w.buf != nil {
+		// we've already read the block from the parent reader for writing the CAR block section (above),
+		// so we need to pass those bytes on in whatever chunk size the caller wants
 		n, err := bytes.NewBuffer(w.buf).Read(p)
 		if err != nil {
 			return n, err
