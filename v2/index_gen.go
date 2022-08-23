@@ -41,13 +41,13 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 	o := ApplyOptions(opts...)
 
 	reader := internalio.ToByteReadSeeker(r)
-	pragma, err := carv1.ReadHeader(r, o.MaxAllowedHeaderSize)
+	v1h, err := carv1.ReadHeader(r, o.MaxAllowedHeaderSize) // pragma for a v2
 	if err != nil {
 		return fmt.Errorf("error reading car header: %w", err)
 	}
 
 	var dataSize, dataOffset int64
-	switch pragma.Version {
+	switch v1h.Version {
 	case 1:
 		break
 	case 2:
@@ -89,7 +89,19 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 			return fmt.Errorf("expected data payload header version of 1; got %d", v1h.Version)
 		}
 	default:
-		return fmt.Errorf("expected either version 1 or 2; got %d", pragma.Version)
+		return fmt.Errorf("expected either version 1 or 2; got %d", v1h.Version)
+	}
+
+	identityRoots := make(map[cid.Cid]bool)
+	if o.StoreIdentityCIDs {
+		for _, r := range v1h.Roots {
+			if r.Prefix().MhType == multihash.IDENTITY {
+				if uint64(r.ByteLen()) > o.MaxIndexCidSize {
+					return &ErrCidTooLarge{MaxSize: o.MaxIndexCidSize, CurrentSize: uint64(r.ByteLen())}
+				}
+				identityRoots[r] = true
+			}
+		}
 	}
 
 	// Record the start of each section, with first section starring from current position in the
@@ -137,6 +149,11 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 			if uint64(cidLen) > o.MaxIndexCidSize {
 				return &ErrCidTooLarge{MaxSize: o.MaxIndexCidSize, CurrentSize: uint64(cidLen)}
 			}
+			for r := range identityRoots {
+				if r.Equals(c) {
+					identityRoots[r] = false // flag as unnecessary to store as an index special-case
+				}
+			}
 			records = append(records, index.Record{Cid: c, Offset: uint64(sectionOffset)})
 		}
 
@@ -153,6 +170,12 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 		// Note, dataSize will be non-zero only if we are reading from a CARv2.
 		if dataSize != 0 && sectionOffset >= dataSize {
 			break
+		}
+	}
+
+	for r, store := range identityRoots {
+		if store {
+			records = append(records, index.Record{Cid: r, Offset: uint64(1)})
 		}
 	}
 
