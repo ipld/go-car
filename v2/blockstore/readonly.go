@@ -1,6 +1,7 @@
 package blockstore
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -208,7 +209,10 @@ func (b *ReadOnly) readBlock(idx int64) (cid.Cid, []byte, error) {
 	if err != nil {
 		return cid.Cid{}, nil, err
 	}
-	return util.ReadNode(r, b.opts.ZeroLengthSectionAsEOF, b.opts.MaxAllowedSectionSize)
+	// ReadNode calls LdRead and CidFromBytes, which in turn repeatedly call
+	// ReadByte(), so add a buffer with at least the size of a uvarint + cid
+	rdr := bufio.NewReaderSize(r, 256)
+	return util.ReadNode(rdr, b.opts.ZeroLengthSectionAsEOF, b.opts.MaxAllowedSectionSize)
 }
 
 // DeleteBlock is unsupported and always errors.
@@ -251,12 +255,15 @@ func (b *ReadOnly) Has(ctx context.Context, key cid.Cid) (bool, error) {
 			fnErr = err
 			return false
 		}
-		_, err = varint.ReadUvarint(uar)
+		// ReadUvarint and CidFromReader repeatedly call ReadByte(), so buffer
+		// reads with a buffer that's at least as large as a uvarint + cid
+		r := bufio.NewReaderSize(uar, 256)
+		_, err = varint.ReadUvarint(r)
 		if err != nil {
 			fnErr = err
 			return false
 		}
-		_, readCid, err := cid.CidFromReader(uar)
+		_, readCid, err := cid.CidFromReader(r)
 		if err != nil {
 			fnErr = err
 			return false
@@ -364,12 +371,15 @@ func (b *ReadOnly) GetSize(ctx context.Context, key cid.Cid) (int, error) {
 			fnErr = err
 			return false
 		}
-		sectionLen, err := varint.ReadUvarint(rdr)
+		// ReadUvarint and CidFromReader repeatedly call ReadByte(), so buffer
+		// reads with a buffer that's at least as large as a uvarint + cid
+		r := bufio.NewReaderSize(rdr, 256)
+		sectionLen, err := varint.ReadUvarint(r)
 		if err != nil {
 			fnErr = err
 			return false
 		}
-		cidLen, readCid, err := cid.CidFromReader(rdr)
+		cidLen, readCid, err := cid.CidFromReader(r)
 		if err != nil {
 			fnErr = err
 			return false
