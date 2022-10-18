@@ -37,6 +37,25 @@ func GenerateIndex(v1r io.Reader, opts ...Option) (index.Index, error) {
 // Note, the index is re-generated every time even if r is in CARv2 format and already has an index.
 // To read existing index when available see ReadOrGenerateIndex.
 func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
+	records := make([]index.Record, 0)
+	it := func(c cid.Cid, offset uint64, length uint64) bool {
+		records = append(records, index.Record{Cid: c, Offset: uint64(offset)})
+		return true
+	}
+	err := IterateIndex(r, it, opts...)
+	if err != nil {
+		return err
+	}
+	return idx.Load(records)
+}
+
+// IndexIterator is called for each section of the CAR with
+// the section cid, section offset and block data length
+type IndexIterator func(sectionCid cid.Cid, sectionOffset uint64, blockLength uint64) bool
+
+// IterateIndex reads a CAR, calling the IndexIterator for each section
+// of the CAR.
+func IterateIndex(r io.Reader, it IndexIterator, opts ...Option) error {
 	// Parse Options.
 	o := ApplyOptions(opts...)
 
@@ -107,13 +126,12 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 	// CARv2 header.
 	sectionOffset -= dataOffset
 
-	records := make([]index.Record, 0)
 	for {
 		// Read the section's length.
 		sectionLen, err := varint.ReadUvarint(reader)
 		if err != nil {
 			if err == io.EOF {
-				break
+				return nil
 			}
 			return err
 		}
@@ -121,7 +139,7 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 		// Null padding; by default it's an error.
 		if sectionLen == 0 {
 			if o.ZeroLengthSectionAsEOF {
-				break
+				return nil
 			} else {
 				return fmt.Errorf("carv1 null padding not allowed by default; see ZeroLengthSectionAsEOF")
 			}
@@ -133,17 +151,21 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 			return err
 		}
 
+		// The section length includes the CID, so subtract it to get the block
+		// length.
+		blockLen := int64(sectionLen) - int64(cidLen)
 		if o.StoreIdentityCIDs || c.Prefix().MhType != multihash.IDENTITY {
 			if uint64(cidLen) > o.MaxIndexCidSize {
 				return &ErrCidTooLarge{MaxSize: o.MaxIndexCidSize, CurrentSize: uint64(cidLen)}
 			}
-			records = append(records, index.Record{Cid: c, Offset: uint64(sectionOffset)})
+			cont := it(c, uint64(sectionOffset), uint64(blockLen))
+			if !cont {
+				return nil
+			}
 		}
 
 		// Seek to the next section by skipping the block.
-		// The section length includes the CID, so subtract it.
-		remainingSectionLen := int64(sectionLen) - int64(cidLen)
-		if sectionOffset, err = reader.Seek(remainingSectionLen, io.SeekCurrent); err != nil {
+		if sectionOffset, err = reader.Seek(blockLen, io.SeekCurrent); err != nil {
 			return err
 		}
 		// Subtract the data offset which will be non-zero when reader represents a CARv2.
@@ -152,15 +174,9 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 		// Check if we have reached the end of data payload and if so treat it as an EOF.
 		// Note, dataSize will be non-zero only if we are reading from a CARv2.
 		if dataSize != 0 && sectionOffset >= dataSize {
-			break
+			return nil
 		}
 	}
-
-	if err := idx.Load(records); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GenerateIndexFromFile walks a CAR file at the give path and generates an index of cid->byte offset.
