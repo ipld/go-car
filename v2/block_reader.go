@@ -9,6 +9,7 @@ import (
 	"github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/ipld/go-car/v2/internal/carv1/util"
 	internalio "github.com/ipld/go-car/v2/internal/io"
+	"github.com/multiformats/go-varint"
 )
 
 // BlockReader facilitates iteration over CAR blocks for both CARv1 and CARv2.
@@ -20,8 +21,9 @@ type BlockReader struct {
 	Roots []cid.Cid
 
 	// Used internally only, by BlockReader.Next during iteration over blocks.
-	r    io.Reader
-	opts Options
+	r      io.Reader
+	offset uint64
+	opts   Options
 }
 
 // NewBlockReader instantiates a new BlockReader facilitating iteration over blocks in CARv1 or
@@ -122,5 +124,59 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 		return nil, fmt.Errorf("mismatch in content integrity, expected: %s, got: %s", c, hashed)
 	}
 
+	ss := uint64(c.ByteLen()) + uint64(len(data))
+	br.offset += uint64(varint.UvarintSize(ss)) + ss
 	return blocks.NewBlockWithCid(data, c)
+}
+
+type BlockMetadata struct {
+	cid.Cid
+	offset uint64
+	size   uint64
+}
+
+// SkipNext jumps over the next block, returning metadata about what it is (the CID, offset, and size).
+// Like Next it will return an io.EOF once it has reached the end.
+//
+// If the underlying reader used by the BlockReader is actually a ReadSeeker, this method will attempt to
+// seek over the underlying data rather than reading it into memory.
+func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
+	sctSize, err := util.LdReadSize(br.r, br.opts.ZeroLengthSectionAsEOF, br.opts.MaxAllowedSectionSize)
+	if err != nil {
+		return nil, err
+	}
+
+	cidSize, c, err := cid.CidFromReader(br.r)
+	if err != nil {
+		return nil, err
+	}
+
+	blkSize := sctSize - uint64(cidSize)
+	if brs, ok := br.r.(io.ReadSeeker); ok {
+		// seek to end.
+		finalOffset, err := brs.Seek(int64(blkSize), io.SeekCurrent)
+		if err != nil {
+			return nil, err
+		}
+		br.offset = uint64(finalOffset)
+		return &BlockMetadata{
+			c,
+			uint64(finalOffset) - sctSize - uint64(varint.UvarintSize(sctSize)),
+			blkSize,
+		}, nil
+	}
+
+	// read to end.
+	_, err = io.CopyN(io.Discard, br.r, int64(blkSize))
+	if err != nil {
+		return nil, err
+	}
+	origOffset := br.offset
+	br.offset += uint64(varint.UvarintSize(sctSize)) + sctSize
+
+	return &BlockMetadata{
+		c,
+		origOffset,
+		blkSize,
+	}, nil
 }
