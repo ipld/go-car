@@ -21,9 +21,10 @@ type BlockReader struct {
 	Roots []cid.Cid
 
 	// Used internally only, by BlockReader.Next during iteration over blocks.
-	r      io.Reader
-	offset uint64
-	opts   Options
+	r          io.Reader
+	offset     uint64
+	readerSize int64
+	opts       Options
 }
 
 // NewBlockReader instantiates a new BlockReader facilitating iteration over blocks in CARv1 or
@@ -54,6 +55,8 @@ func NewBlockReader(r io.Reader, opts ...Option) (*BlockReader, error) {
 		// Simply populate br.Roots and br.r without modifying r.
 		br.Roots = pragmaOrV1Header.Roots
 		br.r = r
+		br.readerSize = -1
+		br.offset, _ = carv1.HeaderSize(pragmaOrV1Header)
 	case 2:
 		// If the version is 2:
 		//  1. Read CARv2 specific header to locate the inner CARv1 data payload offset and size.
@@ -77,6 +80,8 @@ func NewBlockReader(r io.Reader, opts ...Option) (*BlockReader, error) {
 		if _, err := rs.Seek(int64(v2h.DataOffset)-PragmaSize-HeaderSize, io.SeekCurrent); err != nil {
 			return nil, err
 		}
+		br.offset = uint64(v2h.DataOffset)
+		br.readerSize = int64(v2h.DataOffset + v2h.DataSize)
 
 		// Set br.r to a LimitReader reading from r limited to dataSize.
 		br.r = io.LimitReader(r, int64(v2h.DataSize))
@@ -131,8 +136,8 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 
 type BlockMetadata struct {
 	cid.Cid
-	offset uint64
-	size   uint64
+	Offset uint64
+	Size   uint64
 }
 
 // SkipNext jumps over the next block, returning metadata about what it is (the CID, offset, and size).
@@ -146,17 +151,43 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 		return nil, err
 	}
 
-	cidSize, c, err := cid.CidFromReader(br.r)
+	if sctSize == 0 {
+		_, _, err := cid.CidFromBytes([]byte{})
+		return nil, err
+	}
+
+	cidSize, c, err := cid.CidFromReader(io.LimitReader(br.r, int64(sctSize)))
 	if err != nil {
 		return nil, err
 	}
 
 	blkSize := sctSize - uint64(cidSize)
+
 	if brs, ok := br.r.(io.ReadSeeker); ok {
-		// seek to end.
+		if br.readerSize == -1 {
+			cur, err := brs.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return nil, err
+			}
+			end, err := brs.Seek(0, io.SeekEnd)
+			if err != nil {
+				return nil, err
+			}
+			br.readerSize = end
+			if _, err = brs.Seek(cur, io.SeekStart); err != nil {
+				return nil, err
+			}
+		}
+		// seek.
 		finalOffset, err := brs.Seek(int64(blkSize), io.SeekCurrent)
 		if err != nil {
 			return nil, err
+		}
+		if finalOffset != int64(br.offset)+int64(sctSize)+int64(varint.UvarintSize(sctSize)) {
+			return nil, fmt.Errorf("unexpected length")
+		}
+		if finalOffset > br.readerSize {
+			return nil, io.ErrUnexpectedEOF
 		}
 		br.offset = uint64(finalOffset)
 		return &BlockMetadata{
@@ -169,6 +200,9 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 	// read to end.
 	_, err = io.CopyN(io.Discard, br.r, int64(blkSize))
 	if err != nil {
+		if err == io.EOF {
+			return nil, io.ErrUnexpectedEOF
+		}
 		return nil, err
 	}
 	origOffset := br.offset
