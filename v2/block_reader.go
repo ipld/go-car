@@ -163,6 +163,7 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 
 	blkSize := sctSize - uint64(cidSize)
 	if brs, ok := br.r.(io.ReadSeeker); ok {
+		// carv1 and we don't know the size, so work it out and cache it
 		if br.readerSize == -1 {
 			cur, err := brs.Seek(0, io.SeekCurrent)
 			if err != nil {
