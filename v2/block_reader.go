@@ -162,7 +162,6 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 	}
 
 	blkSize := sctSize - uint64(cidSize)
-
 	if brs, ok := br.r.(io.ReadSeeker); ok {
 		if br.readerSize == -1 {
 			cur, err := brs.Seek(0, io.SeekCurrent)
@@ -198,12 +197,15 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 	}
 
 	// read to end.
-	_, err = io.CopyN(io.Discard, br.r, int64(blkSize))
+	readCnt, err := io.CopyN(io.Discard, br.r, int64(blkSize))
 	if err != nil {
 		if err == io.EOF {
 			return nil, io.ErrUnexpectedEOF
 		}
 		return nil, err
+	}
+	if readCnt != int64(blkSize) {
+		return nil, fmt.Errorf("unexpected length")
 	}
 	origOffset := br.offset
 	br.offset += uint64(varint.UvarintSize(sctSize)) + sctSize
