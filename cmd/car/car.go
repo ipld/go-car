@@ -16,6 +16,38 @@ func main1() int {
 		Usage: "Utility for working with car files",
 		Commands: []*cli.Command{
 			{
+				Name:    "convert",
+				Usage:   "Convert a car file to given codec",
+				Aliases: []string{"con"},
+				Action:  ConvertCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "selector",
+						Aliases: []string{"s"},
+						Usage:   "A selector over the dag",
+					},
+				},
+			},
+			{
+				Name:    "concatenate",
+				Usage:   "Concatenate car files",
+				Aliases: []string{"cat"},
+				Action:  CatCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "file",
+						Aliases:   []string{"f", "output", "o"},
+						Usage:     "The car file to write to",
+						TakesFile: true,
+					},
+					&cli.IntFlag{
+						Name:  "version",
+						Value: 2,
+						Usage: "Write output as a v1 or v2 format car",
+					},
+				},
+			},
+			{
 				Name:    "create",
 				Usage:   "Create a car file",
 				Aliases: []string{"c"},
@@ -106,6 +138,19 @@ func main1() int {
 						Name:  "version",
 						Value: 2,
 						Usage: "Write output as a v1 or v2 format car",
+					},
+				},
+			},
+			{
+				Name:   "import",
+				Usage:  "Import a block into a car file",
+				Action: ImportCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "codec",
+						Aliases: []string{"c"},
+						Usage:   "The codec the block data should be interpreted with",
+						Value:   multicodec.DagJson.String(),
 					},
 				},
 			},

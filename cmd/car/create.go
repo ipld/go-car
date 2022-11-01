@@ -32,16 +32,12 @@ func CreateCar(c *cli.Context) error {
 	}
 
 	// make a cid with the right length that we eventually will patch with the root.
-	hasher, err := multihash.GetHasher(multihash.SHA2_256)
+	proxyRoot, err := proxyCid(cidlink.LinkPrototype{
+		Prefix: cid.NewPrefixV1(uint64(multicodec.DagPb), multihash.SHA2_256),
+	})
 	if err != nil {
 		return err
 	}
-	digest := hasher.Sum([]byte{})
-	hash, err := multihash.Encode(digest, multihash.SHA2_256)
-	if err != nil {
-		return err
-	}
-	proxyRoot := cid.NewCidV1(uint64(multicodec.DagPb), hash)
 
 	options := []car.Option{}
 	switch c.Int("version") {

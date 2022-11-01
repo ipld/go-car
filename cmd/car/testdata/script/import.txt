@@ -1,0 +1,11 @@
+env FOO_CID='bafkreicgzc7pgvw5mdtsfboafwkqtsdmtyxi2hv5if6uifq6z6pwtmjira'
+
+stdin foo.txt
+car import -c raw - out.car
+car ls out.car
+stdout -count=1 '^bafk'
+car gb out.car $FOO_CID
+cmp stdout foo.txt
+
+-- foo.txt --
+foo content
