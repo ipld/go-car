@@ -263,9 +263,10 @@ func DebugCar(c *cli.Context) error {
 	if rd.Version == 2 {
 		outStream.WriteString("--v2 ")
 	}
-	outStream.WriteString(inFile + "\r\n")
+
+	outStream.WriteString(inFile + "\n")
 	for _, rt := range rd.Roots {
-		outStream.WriteString("root " + rt.String() + "\r\n")
+		fmt.Fprintf(outStream, "root %s\n", rt.String())
 	}
 
 	// patch each block.
@@ -322,7 +323,6 @@ func patch(ctx context.Context, c cid.Cid, blk []byte) ([]byte, error) {
 			return nil, err
 		}
 		finalBuf.Write(nb)
-		fmt.Printf("for raw: bytes are %x\n", finalBuf.Bytes())
 	}
 
 	// figure out number of lines.
@@ -333,11 +333,11 @@ func patch(ctx context.Context, c cid.Cid, blk []byte) ([]byte, error) {
 	}
 
 	outBuf := bytes.NewBuffer(nil)
-	outBuf.WriteString("--- " + c.String() + "\r\n")
-	outBuf.WriteString("+++ " + outMode + crStr + " " + c.String() + "\r\n")
-	outBuf.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\r\n", 0, lcnt, 0, lcnt))
+	outBuf.WriteString("--- " + c.String() + "\n")
+	outBuf.WriteString("+++ " + outMode + crStr + " " + c.String() + "\n")
+	outBuf.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", 0, lcnt, 0, lcnt))
 	outBuf.Write(finalBuf.Bytes())
-	outBuf.WriteString("\r\n")
+	outBuf.WriteString("\n")
 	return outBuf.Bytes(), nil
 }
 
@@ -427,11 +427,12 @@ func parsePatch(br *bufio.Reader) (cid.Cid, string, []byte, error) {
 
 	// remove the final line return
 	ob := outBuf.Bytes()
-	if len(ob) > 2 && bytes.Equal(ob[len(ob)-2:], []byte("\r\n")) {
-		ob = ob[:len(ob)-2]
+	if len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
+		ob = ob[:len(ob)-1]
 	}
-	if noEndReturn && len(ob) > 2 && bytes.Equal(ob[len(ob)-2:], []byte("\r\n")) {
-		ob = ob[:len(ob)-2]
+
+	if noEndReturn && len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
+		ob = ob[:len(ob)-1]
 	}
 
 	return c, mode, ob, nil
