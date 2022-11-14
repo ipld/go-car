@@ -92,7 +92,7 @@ func CompileCar(c *cli.Context) error {
 		rawCodecs[nextCid] = mode
 	}
 
-	fmt.Printf("structuring as tree...\n")
+	//fmt.Printf("structuring as tree...\n")
 	// structure as a tree
 	childMap := make(map[cid.Cid][]cid.Cid)
 	for c := range rawBlocks {
@@ -117,7 +117,7 @@ func CompileCar(c *cli.Context) error {
 		}
 	}
 
-	fmt.Printf("rebuilding...\n")
+	//fmt.Printf("rebuilding...\n")
 	// re-parse/re-build CIDs
 	outBlocks := make(map[cid.Cid][]byte)
 	for len(childMap) > 0 {
@@ -417,7 +417,9 @@ func parsePatch(br *bufio.Reader) (cid.Cid, string, []byte, error) {
 		}
 		// accumulate to buffer.
 		l, err := br.ReadBytes('\n')
-		outBuf.Write(l)
+		if l != nil {
+			outBuf.Write(l)
+		}
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -427,11 +429,16 @@ func parsePatch(br *bufio.Reader) (cid.Cid, string, []byte, error) {
 
 	// remove the final line return
 	ob := outBuf.Bytes()
-	if len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
+
+	if len(ob) > 2 && bytes.Equal(ob[len(ob)-2:], []byte("\r\n")) {
+		ob = ob[:len(ob)-2]
+	} else if len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
 		ob = ob[:len(ob)-1]
 	}
 
-	if noEndReturn && len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
+	if noEndReturn && len(ob) > 2 && bytes.Equal(ob[len(ob)-2:], []byte("\r\n")) {
+		ob = ob[:len(ob)-2]
+	} else if noEndReturn && len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
 		ob = ob[:len(ob)-1]
 	}
 
