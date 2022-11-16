@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -19,13 +18,19 @@ import (
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
+	"github.com/polydawn/refmt/json"
 	"github.com/urfave/cli/v2"
+)
+
+var (
+	plusLineRegex = regexp.MustCompile(`^\+\+\+ ([\w-]+) ([\S]+ )?([\w]+)$`)
 )
 
 // Compile is a command to translate between a human-debuggable patch-like format and a car file.
@@ -46,10 +51,12 @@ func CompileCar(c *cli.Context) error {
 		return err
 	}
 
-	v2 := strings.Contains(string(header), "--v2")
-	trimH := strings.TrimSpace(string(header))
-	headerParts := strings.Split(trimH, " ")
-	carName := headerParts[len(headerParts)-1]
+	v2 := strings.HasPrefix(string(header), "car compile --v2 ")
+	rest := strings.TrimPrefix(string(header), "car compile ")
+	if v2 {
+		rest = strings.TrimPrefix(rest, "--v2 ")
+	}
+	carName := strings.TrimSpace(rest)
 
 	roots := make([]cid.Cid, 0)
 	for {
@@ -209,7 +216,7 @@ func serializeBlock(ctx context.Context, codec cid.Prefix, encoding string, raw 
 	ls.SetReadStorage(&store)
 	ls.SetWriteStorage(&store)
 	b := basicnode.Prototype.Any.NewBuilder()
-	if encoding == "json" {
+	if encoding == "dag-json" {
 		if err := dagjson.Decode(b, bytes.NewBuffer(raw)); err != nil {
 			return cid.Undef, nil, err
 		}
@@ -301,20 +308,19 @@ func patch(ctx context.Context, c cid.Cid, blk []byte) ([]byte, error) {
 		return nil, fmt.Errorf("could not load block: %q", err)
 	}
 
-	outMode := "json"
+	outMode := "dag-json"
 	if node.Kind() == datamodel.Kind_Bytes && isPrintable(node) {
 		outMode = "raw"
 	}
 	finalBuf := bytes.NewBuffer(nil)
 
-	if outMode == "json" {
-
-		initalJson := bytes.NewBuffer(nil)
-		if err := dagjson.Encode(node, initalJson); err != nil {
-			return nil, err
+	if outMode == "dag-json" {
+		opts := dagjson.EncodeOptions{
+			EncodeLinks: true,
+			EncodeBytes: true,
+			MapSortMode: codec.MapSortMode_Lexical,
 		}
-		// re-do it with standard json to pretty print it.
-		if err := json.Indent(finalBuf, initalJson.Bytes(), "", "  "); err != nil {
+		if err := dagjson.Marshal(node, json.NewEncoder(finalBuf, json.EncodeOptions{Line: []byte{'\n'}, Indent: []byte{'\t'}}), opts); err != nil {
 			return nil, err
 		}
 	} else if outMode == "raw" {
@@ -352,6 +358,10 @@ func isPrintable(n ipld.Node) bool {
 	if bytes.ContainsAny(b, string([]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x17, 0x18, 0x19, 0x1c, 0x1d, 0x1e, 0x1f})) {
 		return false
 	}
+	// check if would confuse the 'end of patch' checker.
+	if bytes.Contains(b, []byte("\n--- ")) {
+		return false
+	}
 	return true
 }
 
@@ -377,13 +387,12 @@ func parsePatch(br *bufio.Reader) (cid.Cid, string, []byte, error) {
 	}
 	var mode string
 	var noEndReturn bool
-	r := regexp.MustCompile(`^\+\+\+ ([\w]+) ([\S]+ )?([\w]+)$`)
-	matches := r.FindSubmatch(l2)
+	matches := plusLineRegex.FindSubmatch(l2)
 	if len(matches) >= 2 {
 		mode = string(matches[1])
 	}
 	if len(matches) < 2 || string(matches[len(matches)-1]) != cs {
-		return cid.Undef, "", nil, fmt.Errorf("mismatched cid lines")
+		return cid.Undef, "", nil, fmt.Errorf("mismatched cid lines: %v", string(l2))
 	}
 	if len(matches[2]) > 0 {
 		noEndReturn = (string(matches[2]) == "(no-end-cr) ")
@@ -427,9 +436,9 @@ func parsePatch(br *bufio.Reader) (cid.Cid, string, []byte, error) {
 		}
 	}
 
-	// remove the final line return
 	ob := outBuf.Bytes()
 
+	// remove the final line return
 	if len(ob) > 2 && bytes.Equal(ob[len(ob)-2:], []byte("\r\n")) {
 		ob = ob[:len(ob)-2]
 	} else if len(ob) > 1 && bytes.Equal(ob[len(ob)-1:], []byte("\n")) {
