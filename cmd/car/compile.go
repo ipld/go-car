@@ -27,6 +27,7 @@ import (
 	"github.com/ipld/go-ipld-prime/storage/memstore"
 	"github.com/polydawn/refmt/json"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -85,6 +86,7 @@ func CompileCar(c *cli.Context) error {
 	}
 
 	//parse blocks.
+	cidList := make([]cid.Cid, 0)
 	rawBlocks := make(map[cid.Cid][]byte)
 	rawCodecs := make(map[cid.Cid]string)
 
@@ -97,6 +99,7 @@ func CompileCar(c *cli.Context) error {
 		}
 		rawBlocks[nextCid] = nextBlk
 		rawCodecs[nextCid] = mode
+		cidList = append(cidList, nextCid)
 	}
 
 	//fmt.Printf("structuring as tree...\n")
@@ -137,6 +140,8 @@ func CompileCar(c *cli.Context) error {
 					return err
 				}
 				outBlocks[finalCid] = finalBlk
+				idx := slices.Index(cidList, origCid)
+				cidList[idx] = finalCid
 
 				// update other remaining nodes of the new cid.
 				for otherCid, otherKids := range childMap {
@@ -200,7 +205,8 @@ func CompileCar(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		for bc, blk := range outBlocks {
+		for _, bc := range cidList {
+			blk := outBlocks[bc]
 			ob, _ := blocks.NewBlockWithCid(blk, bc)
 			bs.Put(c.Context, ob)
 		}
