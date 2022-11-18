@@ -102,7 +102,10 @@ func CompileCar(c *cli.Context) error {
 		cidList = append(cidList, nextCid)
 	}
 
-	//fmt.Printf("structuring as tree...\n")
+	// Re-create the original IPLD encoded blocks, but allowing for modifications of the
+	// patch data which may generate new CIDs; so we track the DAG relationships and
+	// rewrite CIDs in other referring where they get updated.
+
 	// structure as a tree
 	childMap := make(map[cid.Cid][]cid.Cid)
 	for c := range rawBlocks {
@@ -127,7 +130,6 @@ func CompileCar(c *cli.Context) error {
 		}
 	}
 
-	//fmt.Printf("rebuilding...\n")
 	// re-parse/re-build CIDs
 	outBlocks := make(map[cid.Cid][]byte)
 	for len(childMap) > 0 {
