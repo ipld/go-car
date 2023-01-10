@@ -2,12 +2,12 @@ module github.com/ipld/go-car
 
 require (
 	github.com/ipfs/go-block-format v0.0.3
-	github.com/ipfs/go-cid v0.1.0
+	github.com/ipfs/go-cid v0.2.0
 	github.com/ipfs/go-ipld-cbor v0.0.5
 	github.com/ipfs/go-ipld-format v0.3.0
 	github.com/ipfs/go-merkledag v0.8.1
-	github.com/ipld/go-codec-dagpb v1.3.1
-	github.com/ipld/go-ipld-prime v0.16.0
+	github.com/ipld/go-codec-dagpb v1.5.0
+	github.com/ipld/go-ipld-prime v0.18.0
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/stretchr/testify v1.7.0
 )
@@ -50,7 +50,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	lukechampine.com/blake3 v1.1.6 // indirect
 )
