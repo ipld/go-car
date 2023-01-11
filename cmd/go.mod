@@ -10,8 +10,8 @@ require (
 	github.com/ipfs/go-unixfsnode v1.4.0
 	github.com/ipld/go-car v0.4.0
 	github.com/ipld/go-car/v2 v2.4.1
-	github.com/ipld/go-codec-dagpb v1.4.1
-	github.com/ipld/go-ipld-prime v0.17.0
+	github.com/ipld/go-codec-dagpb v1.5.0
+	github.com/ipld/go-ipld-prime v0.18.0
 	github.com/multiformats/go-multicodec v0.5.0
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/multiformats/go-varint v0.0.6
@@ -67,7 +67,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/errgo.v2 v2.1.0 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
