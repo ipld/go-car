@@ -13,7 +13,7 @@ require (
 	github.com/ipld/go-codec-dagpb v1.4.1
 	github.com/ipld/go-ipld-prime v0.17.0
 	github.com/multiformats/go-multicodec v0.5.0
-	github.com/multiformats/go-multihash v0.2.0
+	github.com/multiformats/go-multihash v0.2.1
 	github.com/multiformats/go-varint v0.0.6
 	github.com/polydawn/refmt v0.0.0-20201211092308-30ac6d18308e
 	github.com/rogpeppe/go-internal v1.8.1
@@ -40,7 +40,7 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.1.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.6.0 // indirect
+	github.com/ipfs/go-merkledag v0.8.1 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-verifcid v0.0.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
