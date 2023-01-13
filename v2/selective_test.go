@@ -10,8 +10,8 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-unixfsnode"
-	"github.com/ipfs/go-unixfsnode/data/builder"
+	unixfsnode "github.com/ipfs/go-libipfs/unixfs/node"
+	"github.com/ipfs/go-libipfs/unixfs/node/data/builder"
 	"github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 	dagpb "github.com/ipld/go-codec-dagpb"
