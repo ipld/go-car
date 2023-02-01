@@ -47,7 +47,7 @@ func TestReadWriteGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) 
 	require.Nil(t, gotBlock)
 }
 
-func TestBlockstoreX(t *testing.T) {
+func TestBlockstore(t *testing.T) {
 	originalCARv1Path := "../testdata/sample-v1.car"
 	originalCARv1ComparePath := "../testdata/sample-v1-noidentity.car"
 	originalCARv1ComparePathStat, err := os.Stat(originalCARv1ComparePath)
@@ -163,6 +163,124 @@ func TestBlockstoreX(t *testing.T) {
 			require.Equal(t, wantWritten, gotWritten)
 			require.Equal(t, wantSum, gotSum)
 		})
+	}
+}
+
+// In this case we use the fact that the `File` interface that OpenReadWriteFile
+// accepts can be replaced with something .. novel. In this case, we use a
+// `TeeingWriter` to write to a file, and an io.Writer (in this case, a second
+// file) at the same time. This should result in a usable Blockstore interface
+// and a streaming output.
+// Note that CARv2 writes won't work as they need to seek back to the begining
+// and write offset data to the header.
+func TestBlockstoreV1WithTeeingWriter(t *testing.T) {
+	originalCARv1Path := "../testdata/sample-v1.car"
+	originalCARv1ComparePath := "../testdata/sample-v1-noidentity.car"
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	f, err := os.Open(originalCARv1Path)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, f.Close()) })
+	r, err := carv1.NewCarReader(f)
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "readwrite.car")
+	outFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o666)
+	require.NoError(t, err)
+	teePath := filepath.Join(t.TempDir(), "readwrite_tee.car")
+	teeFile, err := os.OpenFile(teePath, os.O_RDWR|os.O_CREATE, 0o666)
+	require.NoError(t, err)
+	ingester, err := blockstore.OpenReadWriteFile(&teeingFile{File: outFile, Tee: &writerOnly{teeFile}}, r.Header.Roots, blockstore.WriteAsCarV1(true))
+	require.NoError(t, err)
+	t.Cleanup(func() { ingester.Finalize() })
+	t.Cleanup(func() { teeFile.Close() })
+
+	cids := make([]cid.Cid, 0)
+	var idCidCount int
+	for {
+		b, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		err = ingester.Put(ctx, b)
+		require.NoError(t, err)
+		cids = append(cids, b.Cid())
+
+		// try reading a random one:
+		candidate := cids[rng.Intn(len(cids))]
+		if has, err := ingester.Has(ctx, candidate); !has || err != nil {
+			t.Fatalf("expected to find %s but didn't: %s", candidate, err)
+		}
+
+		dmh, err := multihash.Decode(b.Cid().Hash())
+		require.NoError(t, err)
+		if dmh.Code == multihash.IDENTITY {
+			idCidCount++
+		}
+	}
+
+	for _, c := range cids {
+		b, err := ingester.Get(ctx, c)
+		require.NoError(t, err)
+		if !b.Cid().Equals(c) {
+			t.Fatal("wrong item returned")
+		}
+	}
+
+	require.NoError(t, ingester.Finalize())
+	require.NoError(t, teeFile.Close())
+
+	for _, pathToVerify := range []string{path, teePath} {
+		robs, err := blockstore.OpenReadOnly(pathToVerify)
+		require.NoError(t, err)
+		t.Cleanup(func() { robs.Close() })
+
+		allKeysCh, err := robs.AllKeysChan(ctx)
+		require.NoError(t, err)
+		numKeysCh := 0
+		for c := range allKeysCh {
+			b, err := robs.Get(ctx, c)
+			require.NoError(t, err)
+			if !b.Cid().Equals(c) {
+				t.Fatal("wrong item returned")
+			}
+			numKeysCh++
+		}
+		expectedCidCount := len(cids) - idCidCount
+		require.Equal(t, expectedCidCount, numKeysCh, "AllKeysChan returned an unexpected amount of keys; expected %v but got %v", expectedCidCount, numKeysCh)
+
+		for _, c := range cids {
+			b, err := robs.Get(ctx, c)
+			require.NoError(t, err)
+			if !b.Cid().Equals(c) {
+				t.Fatal("wrong item returned")
+			}
+		}
+
+		wrote, err := os.Open(pathToVerify)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, wrote.Close()) })
+		hasher := sha512.New()
+		gotWritten, err := io.Copy(hasher, wrote)
+		require.NoError(t, err)
+		gotSum := hasher.Sum(nil)
+
+		hasher.Reset()
+		originalCarV1, err := os.Open(originalCARv1ComparePath)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, originalCarV1.Close()) })
+		wantWritten, err := io.Copy(hasher, originalCarV1)
+		require.NoError(t, err)
+		wantSum := hasher.Sum(nil)
+
+		require.Equal(t, wantWritten, gotWritten)
+		require.Equal(t, wantSum, gotSum)
+
+		assert.NoError(t, robs.Close())
 	}
 }
 
@@ -1026,4 +1144,61 @@ func TestBlockstore_IdentityCidWithEmptyDataIsIndexed(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
+}
+
+type writerOnly struct {
+	io.Writer
+}
+
+func (w *writerOnly) Write(p []byte) (n int, err error) {
+	return w.Writer.Write(p)
+}
+
+type teeingFile struct {
+	File *os.File
+	Tee  io.Writer
+
+	offset int64
+}
+
+func (t *teeingFile) WriteAt(p []byte, off int64) (n int, err error) {
+	if off < t.offset {
+		return 0, fmt.Errorf("rewind seek to %d not supported by TeeingFile, expected >= %d", off, t.offset)
+	}
+	for t.offset < off {
+		// Write zeros to the tee until we reach the offset.
+		len := off - t.offset
+		if len > 1024 {
+			len = 1024
+		}
+		if _, err := t.Tee.Write(make([]byte, len)); err != nil {
+			return 0, err
+		}
+		t.offset += len
+	}
+	if _, err := t.Tee.Write(p); err != nil {
+		return 0, err
+	}
+	t.offset += int64(len(p))
+	return t.File.WriteAt(p, off)
+}
+
+func (t *teeingFile) Close() error {
+	return t.File.Close()
+}
+
+func (t *teeingFile) ReadAt(p []byte, off int64) (n int, err error) {
+	return t.File.ReadAt(p, off)
+}
+
+func (t *teeingFile) Read(p []byte) (n int, err error) {
+	return t.File.Read(p)
+}
+
+func (t *teeingFile) Truncate(size int64) error {
+	return t.File.Truncate(size)
+}
+
+func (t *teeingFile) Stat() (os.FileInfo, error) {
+	return t.File.Stat()
 }

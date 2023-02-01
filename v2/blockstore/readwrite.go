@@ -33,12 +33,22 @@ var _ blockstore.Blockstore = (*ReadWrite)(nil)
 type ReadWrite struct {
 	ronly ReadOnly
 
-	f          *os.File
+	f          File
 	dataWriter *internalio.OffsetWriteSeeker
 	idx        *insertionIndex
 	header     carv2.Header
 
 	opts carv2.Options
+}
+
+// File is a subset of os.File that is used by a ReadWrite
+type File interface {
+	io.Reader
+	io.ReaderAt
+	io.WriterAt
+	Stat() (os.FileInfo, error)
+	Close() error
+	Truncate(size int64) error
 }
 
 // WriteAsCarV1 is a write option which makes a CAR blockstore write the output
@@ -115,7 +125,7 @@ func OpenReadWrite(path string, roots []cid.Cid, opts ...carv2.Option) (*ReadWri
 
 // OpenReadWriteFile is similar as OpenReadWrite but lets you control the file lifecycle.
 // You are responsible for closing the given file.
-func OpenReadWriteFile(f *os.File, roots []cid.Cid, opts ...carv2.Option) (*ReadWrite, error) {
+func OpenReadWriteFile(f File, roots []cid.Cid, opts ...carv2.Option) (*ReadWrite, error) {
 	stat, err := f.Stat()
 	if err != nil {
 		// Note, we should not get a an os.ErrNotExist here because the flags used to open file includes os.O_CREATE
