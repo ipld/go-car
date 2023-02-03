@@ -11,6 +11,9 @@ import (
 	"github.com/ipld/go-car/v2/internal/carv1"
 	"github.com/ipld/go-car/v2/internal/carv1/util"
 	internalio "github.com/ipld/go-car/v2/internal/io"
+	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/multiformats/go-varint"
@@ -346,6 +349,26 @@ func (r *Reader) Inspect(validateBlockHash bool) (Stats, error) {
 	}
 
 	return stats, nil
+}
+
+// ReadEmbeddedMessage reads a length-prefixed dag-cbor message embedded after the CARv2 header
+// if the 'MessageAfterHeader' characteristic bit is set for this CAR and the message exists.
+func (r *Reader) ReadEmbeddedMessage() (datamodel.Node, error) {
+	if !r.Header.Characteristics.IsMessageAfterHeader() {
+		return nil, errors.New("'MessageAfterHeader' bit is not set in the characteristics for this CAR")
+	}
+
+	msgStart := int64(PragmaSize + HeaderSize)
+	gapLen := int64(r.Header.DataOffset) - msgStart
+	if gapLen <= 0 {
+		return nil, errors.New("invalid MessageAfterHeader, no space after header")
+	}
+	msgReader := io.NewSectionReader(r.r, msgStart, gapLen)
+	byts, err := util.LdRead(msgReader, false, r.opts.MaxAllowedSectionSize)
+	if err != nil {
+		return nil, err
+	}
+	return ipld.Decode(byts, dagcbor.Decode)
 }
 
 // Close closes the underlying reader if it was opened by OpenReader.

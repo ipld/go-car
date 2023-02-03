@@ -11,6 +11,9 @@ import (
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
 	internalio "github.com/ipld/go-car/v2/internal/io"
+	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/multiformats/go-varint"
 )
 
 // ErrAlreadyV1 signals that the given payload is already in CARv1 format.
@@ -46,21 +49,27 @@ func WrapV1File(srcPath, dstPath string) error {
 	return nil
 }
 
-// WrapV1 takes a CARv1 file and wraps it as a CARv2 file with an index.
+// WrapV1 takes a CARv1 file and wraps it as a CARv2 file with an index (unless
+// the WithoutIndex option is supplied).
 // The resulting CARv2 file's inner CARv1 payload is left unmodified,
-// and does not use any padding before the innner CARv1 or index.
+// and does not use any padding before the inner CARv1 or index.
+// The EmbedMessage option may be used to insert an additional message after the
+// CARv2 header.
 func WrapV1(src io.ReadSeeker, dst io.Writer, opts ...Option) error {
 	// TODO: verify src is indeed a CARv1 to prevent misuse.
 	// GenerateIndex should probably be in charge of that.
 
 	o := ApplyOptions(opts...)
-	idx, err := index.New(o.IndexCodec)
-	if err != nil {
-		return err
-	}
-
-	if err := LoadIndex(idx, src, opts...); err != nil {
-		return err
+	var idx index.Index
+	var err error
+	if o.IndexCodec != index.CarIndexNone {
+		idx, err = index.New(o.IndexCodec)
+		if err != nil {
+			return err
+		}
+		if err := LoadIndex(idx, src, opts...); err != nil {
+			return err
+		}
 	}
 
 	// Use Seek to learn the size of the CARv1 before reading it.
@@ -74,18 +83,44 @@ func WrapV1(src io.ReadSeeker, dst io.Writer, opts ...Option) error {
 
 	// Similar to the writer API, write all components of a CARv2 to the
 	// destination file: Pragma, Header, CARv1, Index.
-	v2Header := NewHeader(uint64(v1Size))
 	if _, err := dst.Write(Pragma); err != nil {
 		return err
 	}
-	if _, err := v2Header.WriteTo(dst); err != nil {
-		return err
+	v2Header := NewHeader(uint64(v1Size))
+	if o.IndexCodec == index.CarIndexNone {
+		v2Header.IndexOffset = 0
+	}
+
+	if o.EmbeddedMessage != nil {
+		v2Header.Characteristics.SetMessageAfterHeader(true)
+		msgBytes, err := ipld.Encode(o.EmbeddedMessage, dagcbor.Encode)
+		if err != nil {
+			return err
+		}
+		lenBuf := make([]byte, 8)
+		lenLen := varint.PutUvarint(lenBuf, uint64(len(msgBytes)))
+		v2Header.DataOffset += uint64(lenLen + len(msgBytes))
+		if _, err := v2Header.WriteTo(dst); err != nil {
+			return err
+		}
+		if _, err = dst.Write(lenBuf[:lenLen]); err != nil {
+			return err
+		}
+		if _, err = dst.Write(msgBytes); err != nil {
+			return err
+		}
+	} else {
+		if _, err := v2Header.WriteTo(dst); err != nil {
+			return err
+		}
 	}
 	if _, err := io.Copy(dst, src); err != nil {
 		return err
 	}
-	if _, err := index.WriteTo(idx, dst); err != nil {
-		return err
+	if idx != nil {
+		if _, err := index.WriteTo(idx, dst); err != nil {
+			return err
+		}
 	}
 
 	return nil
