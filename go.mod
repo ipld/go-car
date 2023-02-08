@@ -1,5 +1,7 @@
 module github.com/ipld/go-car
 
+go 1.19
+
 require (
 	github.com/ipfs/go-cid v0.3.2
 	github.com/ipfs/go-ipld-cbor v0.0.6
@@ -60,5 +62,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
-
-go 1.18
