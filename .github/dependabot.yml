@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "gomod"
+    directory: "/v2"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "gomod"
+    directory: "/cmd/car"
+    schedule:
+      interval: "weekly"
