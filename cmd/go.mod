@@ -16,7 +16,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/multiformats/go-varint v0.0.7
 	github.com/polydawn/refmt v0.89.0
-	github.com/rogpeppe/go-internal v1.9.0
+	github.com/rogpeppe/go-internal v1.9.1-0.20230209130841-f0583b8402aa
 	github.com/urfave/cli/v2 v2.24.3
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 )
