@@ -11,7 +11,7 @@ require (
 	github.com/ipld/go-car v0.5.0
 	github.com/ipld/go-car/v2 v2.5.1
 	github.com/ipld/go-codec-dagpb v1.5.0
-	github.com/ipld/go-ipld-prime v0.18.0
+	github.com/ipld/go-ipld-prime v0.19.0
 	github.com/multiformats/go-multicodec v0.6.0
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/multiformats/go-varint v0.0.6
