@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math/rand"
 	"os"
 	"path"
 	"testing"
@@ -134,4 +135,43 @@ func TestPartialTraversal(t *testing.T) {
 		fnd[b.Cid()] = struct{}{}
 	}
 	require.Equal(t, 2, len(fnd))
+}
+
+func TestOffsetWrites(t *testing.T) {
+	store := cidlink.Memory{Bag: make(map[string][]byte)}
+	ls := cidlink.DefaultLinkSystem()
+	ls.StorageReadOpener = store.OpenRead
+	ls.StorageWriteOpener = store.OpenWrite
+	unixfsnode.AddUnixFSReificationToLinkSystem(&ls)
+
+	// write a unixfs file.
+	initBuf := bytes.Buffer{}
+	data := make([]byte, 1000000)
+	_, _ = rand.Read(data)
+	_, _ = initBuf.Write(data)
+	rootCid, _, err := builder.BuildUnixFSFile(&initBuf, "", &ls)
+	require.NoError(t, err)
+	_, rts, err := cid.CidFromBytes([]byte(rootCid.Binary()))
+	require.NoError(t, err)
+
+	// get the full car buffer.
+	fullBuf := bytes.Buffer{}
+	_, err = car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &fullBuf)
+	require.NoError(t, err)
+
+	for i := uint64(1); i < 1000; i += 1 {
+		buf := bytes.Buffer{}
+
+		_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, car.WithSkipOffset(i))
+		require.NoError(t, err)
+		require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+	}
+
+	for i := uint64(1000); i < 1000000; i += 1000 {
+		buf := bytes.Buffer{}
+
+		_, err := car.TraverseV1(context.Background(), &ls, rts, selectorparse.CommonSelector_ExploreAllRecursively, &buf, car.WithSkipOffset(i))
+		require.NoError(t, err)
+		require.Equal(t, fullBuf.Bytes()[i:], buf.Bytes())
+	}
 }

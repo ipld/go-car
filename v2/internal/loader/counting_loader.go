@@ -9,13 +9,13 @@ import (
 	"github.com/multiformats/go-varint"
 )
 
-// counter tracks how much data has been read.
-type counter struct {
-	totalRead uint64
+// Counter tracks how much data has been read.
+type Counter struct {
+	TotalRead uint64
 }
 
-func (c *counter) Size() uint64 {
-	return c.totalRead
+func (c *Counter) Size() uint64 {
+	return c.TotalRead
 }
 
 // ReadCounter provides an externally consumable interface to the
@@ -26,12 +26,12 @@ type ReadCounter interface {
 
 type countingReader struct {
 	r io.Reader
-	c *counter
+	c *Counter
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
-	c.c.totalRead += uint64(n)
+	c.c.TotalRead += uint64(n)
 	return n, err
 }
 
@@ -41,7 +41,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 // appear in a CAR file is added to the counter (included the size of the
 // CID and the varint length for the block data).
 func CountingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, ReadCounter) {
-	c := counter{}
+	c := Counter{}
 	clc := ls
 	clc.StorageReadOpener = func(lc linking.LinkContext, l ipld.Link) (io.Reader, error) {
 		r, err := ls.StorageReadOpener(lc, l)
@@ -54,7 +54,7 @@ func CountingLinkSystem(ls ipld.LinkSystem) (ipld.LinkSystem, ReadCounter) {
 			return nil, err
 		}
 		size := varint.ToUvarint(uint64(n) + uint64(len(l.Binary())))
-		c.totalRead += uint64(len(size)) + uint64(len(l.Binary()))
+		c.TotalRead += uint64(len(size)) + uint64(len(l.Binary()))
 		return &countingReader{buf, &c}, nil
 	}
 	return clc, &c

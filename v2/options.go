@@ -60,6 +60,8 @@ type Options struct {
 	MaxTraversalLinks            uint64
 	WriteAsCarV1                 bool
 	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
+	DataPayloadSize              uint64
+	SkipOffset                   uint64
 
 	MaxAllowedHeaderSize  uint64
 	MaxAllowedSectionSize uint64
@@ -94,6 +96,14 @@ func ApplyOptions(opt ...Option) Options {
 func ZeroLengthSectionAsEOF(enable bool) Option {
 	return func(o *Options) {
 		o.ZeroLengthSectionAsEOF = enable
+	}
+}
+
+// WithSkipOffset sets the start offset we should seek to the in the traversal
+// when writing out a CAR. This option only applies to the selective and traversal writer.
+func WithSkipOffset(skip uint64) Option {
+	return func(o *Options) {
+		o.SkipOffset = skip
 	}
 }
 
