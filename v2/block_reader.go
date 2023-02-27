@@ -134,6 +134,20 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 	return blocks.NewBlockWithCid(data, c)
 }
 
+// NextInsecure works in the same way as Next(), except it does not re-hash
+// every block to verify that the CID corresponds to the block. It should not
+// be used with untrusted or potentially corrupted CAR files. On the plus side, it is much ligher on the CPU.
+func (br *BlockReader) NextInsecure() (blocks.Block, error) {
+	c, data, err := util.ReadNode(br.r, br.opts.ZeroLengthSectionAsEOF, br.opts.MaxAllowedSectionSize)
+	if err != nil {
+		return nil, err
+	}
+
+	ss := uint64(c.ByteLen()) + uint64(len(data))
+	br.offset += uint64(varint.UvarintSize(ss)) + ss
+	return blocks.NewBlockWithCid(data, c)
+}
+
 type BlockMetadata struct {
 	cid.Cid
 	Offset uint64
