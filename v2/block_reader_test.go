@@ -190,7 +190,7 @@ func TestTrustedCAR(t *testing.T) {
 	cid, err := pfx.Sum(block)
 	require.NoError(t, err)
 
-	// Modity the block so it won't match CID anymore
+	// Modify the block so it won't match CID anymore
 	block[2] = 0xFF
 	// construct CAR
 	var buf bytes.Buffer
@@ -202,7 +202,6 @@ func TestTrustedCAR(t *testing.T) {
 	// try to read it as trusted
 	car, err := carv2.NewBlockReader(bytes.NewReader(buf.Bytes()), carv2.WithTrustedCAR(true))
 	require.NoError(t, err)
-	// error should occur on first section read
 	_, err = car.Next()
 	require.NoError(t, err)
 
