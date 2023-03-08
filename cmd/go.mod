@@ -6,19 +6,19 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ipfs/go-cid v0.3.2
 	github.com/ipfs/go-ipld-format v0.4.0
-	github.com/ipfs/go-libipfs v0.5.0
-	github.com/ipfs/go-unixfsnode v1.5.2
+	github.com/ipfs/go-libipfs v0.6.1
+	github.com/ipfs/go-unixfsnode v1.5.3-0.20230308034728-3958404b70c0
 	github.com/ipld/go-car v0.6.0
-	github.com/ipld/go-car/v2 v2.7.0
+	github.com/ipld/go-car/v2 v2.8.0
 	github.com/ipld/go-codec-dagpb v1.6.0
 	github.com/ipld/go-ipld-prime v0.20.0
-	github.com/multiformats/go-multicodec v0.8.0
+	github.com/multiformats/go-multicodec v0.8.1
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/multiformats/go-varint v0.0.7
 	github.com/polydawn/refmt v0.89.0
 	github.com/rogpeppe/go-internal v1.9.1-0.20230209130841-f0583b8402aa
-	github.com/urfave/cli/v2 v2.24.3
-	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	github.com/urfave/cli/v2 v2.25.0
+	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 )
 
 require (
@@ -42,7 +42,7 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.1.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.9.0 // indirect
+	github.com/ipfs/go-merkledag v0.10.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-verifcid v0.0.2 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
