@@ -310,7 +310,7 @@ func TestReadingZeroLengthSectionWithoutOptionSetIsError(t *testing.T) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			require.EqualError(t, err, "varints malformed, could not reach the end")
+			require.EqualError(t, err, "invalid cid: varints malformed, could not reach the end")
 			return
 		}
 	}

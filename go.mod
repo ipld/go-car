@@ -3,10 +3,10 @@ module github.com/ipld/go-car
 go 1.19
 
 require (
-	github.com/ipfs/go-cid v0.3.2
+	github.com/ipfs/boxo v0.7.1-0.20230320215318-0a46dee1a780
+	github.com/ipfs/go-cid v0.4.0
 	github.com/ipfs/go-ipld-cbor v0.0.6
 	github.com/ipfs/go-ipld-format v0.4.0
-	github.com/ipfs/go-libipfs v0.6.1
 	github.com/ipfs/go-merkledag v0.10.0
 	github.com/ipld/go-codec-dagpb v1.6.0
 	github.com/ipld/go-ipld-prime v0.20.0
@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/go-block-format v0.1.1 // indirect
+	github.com/ipfs/go-block-format v0.1.2-0.20230320222416-ba43dc7de213 // indirect
 	github.com/ipfs/go-blockservice v0.5.0 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
 	github.com/ipfs/go-ipfs-blockstore v1.2.0 // indirect

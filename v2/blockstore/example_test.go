@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	blocks "github.com/ipfs/boxo/blocks"
 	"github.com/ipfs/go-cid"
-	blocks "github.com/ipfs/go-libipfs/blocks"
 	"github.com/ipfs/go-merkledag"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
