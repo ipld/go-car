@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	blocks "github.com/ipfs/go-libipfs/blocks"
 
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
