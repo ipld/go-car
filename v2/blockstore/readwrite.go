@@ -37,7 +37,7 @@ type ReadWrite struct {
 
 	f          *os.File
 	dataWriter *internalio.OffsetWriteSeeker
-	idx        *store.InsertionIndex
+	idx        *index.InsertionIndex
 	header     carv2.Header
 
 	finalized bool // also protected by ronly.mu
@@ -117,7 +117,7 @@ func OpenReadWriteFile(f *os.File, roots []cid.Cid, opts ...carv2.Option) (*Read
 	// Set the header fileld before applying options since padding options may modify header.
 	rwbs := &ReadWrite{
 		f:         f,
-		idx:       store.NewInsertionIndex(),
+		idx:       index.NewInsertionIndex(),
 		header:    carv2.NewHeader(0),
 		opts:      carv2.ApplyOptions(opts...),
 		finalized: false,
