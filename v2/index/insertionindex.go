@@ -1,4 +1,4 @@
-package store
+package index
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-car/v2/index"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/petar/GoLLRB/llrb"
@@ -34,7 +33,7 @@ func NewInsertionIndex() *InsertionIndex {
 
 type recordDigest struct {
 	digest []byte
-	index.Record
+	Record
 }
 
 func (r recordDigest) Less(than llrb.Item) bool {
@@ -45,7 +44,7 @@ func (r recordDigest) Less(than llrb.Item) bool {
 	return bytes.Compare(r.digest, other.digest) < 0
 }
 
-func newRecordDigest(r index.Record) recordDigest {
+func newRecordDigest(r Record) recordDigest {
 	d, err := multihash.Decode(r.Hash())
 	if err != nil {
 		panic(err)
@@ -60,7 +59,7 @@ func newRecordFromCid(c cid.Cid, at uint64) recordDigest {
 		panic(err)
 	}
 
-	return recordDigest{d.Digest, index.Record{Cid: c, Offset: at}}
+	return recordDigest{d.Digest, Record{Cid: c, Offset: at}}
 }
 
 func (ii *InsertionIndex) InsertNoReplace(key cid.Cid, n uint64) {
@@ -75,19 +74,19 @@ func (ii *InsertionIndex) Get(c cid.Cid) (uint64, error) {
 	return record.Offset, nil
 }
 
-func (ii *InsertionIndex) getRecord(c cid.Cid) (index.Record, error) {
+func (ii *InsertionIndex) getRecord(c cid.Cid) (Record, error) {
 	d, err := multihash.Decode(c.Hash())
 	if err != nil {
-		return index.Record{}, err
+		return Record{}, err
 	}
 	entry := recordDigest{digest: d.Digest}
 	e := ii.items.Get(entry)
 	if e == nil {
-		return index.Record{}, index.ErrNotFound
+		return Record{}, ErrNotFound
 	}
 	r, ok := e.(recordDigest)
 	if !ok {
-		return index.Record{}, errUnsupported
+		return Record{}, errUnsupported
 	}
 
 	return r.Record, nil
@@ -112,7 +111,7 @@ func (ii *InsertionIndex) GetAll(c cid.Cid, fn func(uint64) bool) error {
 	}
 	ii.items.AscendGreaterOrEqual(entry, iter)
 	if !any {
-		return index.ErrNotFound
+		return ErrNotFound
 	}
 	return nil
 }
@@ -142,7 +141,7 @@ func (ii *InsertionIndex) Unmarshal(r io.Reader) error {
 	}
 	d := cbor.NewDecoder(r)
 	for i := int64(0); i < length; i++ {
-		var rec index.Record
+		var rec Record
 		if err := d.Decode(&rec); err != nil {
 			return err
 		}
@@ -175,7 +174,7 @@ func (ii *InsertionIndex) Codec() multicodec.Code {
 	return insertionIndexCodec
 }
 
-func (ii *InsertionIndex) Load(rs []index.Record) error {
+func (ii *InsertionIndex) Load(rs []Record) error {
 	for _, r := range rs {
 		rec := newRecordDigest(r)
 		if rec.digest == nil {
@@ -187,12 +186,12 @@ func (ii *InsertionIndex) Load(rs []index.Record) error {
 }
 
 // flatten returns a formatted index in the given codec for more efficient subsequent loading.
-func (ii *InsertionIndex) Flatten(codec multicodec.Code) (index.Index, error) {
-	si, err := index.New(codec)
+func (ii *InsertionIndex) Flatten(codec multicodec.Code) (Index, error) {
+	si, err := New(codec)
 	if err != nil {
 		return nil, err
 	}
-	rcrds := make([]index.Record, ii.items.Len())
+	rcrds := make([]Record, ii.items.Len())
 
 	idx := 0
 	iter := func(i llrb.Item) bool {
