@@ -215,7 +215,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 				return 0, err
 			}
 			if c.IsSet("verbose") {
-				fmt.Fprintf(c.App.Writer, "%s\n", nextRes)
+				fmt.Fprintf(c.App.ErrWriter, "%s\n", nextRes)
 			}
 		}
 
@@ -401,6 +401,7 @@ func NewStdinReadStorage(reader io.Reader) (*stdinReadStorage, []cid.Cid, error)
 			if err == io.EOF {
 				srs.lk.Lock()
 				srs.done = true
+				srs.cond.Broadcast()
 				srs.lk.Unlock()
 				return
 			}
