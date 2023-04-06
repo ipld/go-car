@@ -9,6 +9,6 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "gomod"
-    directory: "/cmd/car"
+    directory: "/cmd"
     schedule:
       interval: "weekly"
