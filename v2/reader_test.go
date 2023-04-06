@@ -458,7 +458,7 @@ func TestInspectError(t *testing.T) {
 		{
 			name:                 "BadCidV0",
 			carHex:               "3aa265726f6f747381d8305825000130302030303030303030303030303030303030303030303030303030303030303030306776657273696f6e010130",
-			expectedInspectError: "expected 1 as the cid version number, got: 48",
+			expectedInspectError: "invalid cid: expected 1 as the cid version number, got: 48",
 		},
 		{
 			name:              "BadHeaderLength",
