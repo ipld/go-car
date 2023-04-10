@@ -9,7 +9,7 @@ require (
 	github.com/ipfs/go-ipld-format v0.4.0
 	github.com/ipfs/go-unixfsnode v1.6.0
 	github.com/ipld/go-car v0.6.1-0.20230406035547-a06f8a9fdb4a
-	github.com/ipld/go-car/v2 v2.9.1-0.20230406035547-a06f8a9fdb4a
+	github.com/ipld/go-car/v2 v2.10.0
 	github.com/ipld/go-codec-dagpb v1.6.0
 	github.com/ipld/go-ipld-prime v0.20.0
 	github.com/multiformats/go-multicodec v0.8.1

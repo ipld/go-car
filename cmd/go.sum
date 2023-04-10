@@ -112,8 +112,8 @@ github.com/ipfs/go-verifcid v0.0.2 h1:XPnUv0XmdH+ZIhLGKg6U2vaPaRDXb9urMyNVCE7uvT
 github.com/ipfs/go-verifcid v0.0.2/go.mod h1:40cD9x1y4OWnFXbLNJYRe7MpNvWlMn3LZAG5Wb4xnPU=
 github.com/ipld/go-car v0.6.1-0.20230406035547-a06f8a9fdb4a h1:rnJQsx2JeiFFNItSa8zrOvcPhjeziYnS2bRMMVN870M=
 github.com/ipld/go-car v0.6.1-0.20230406035547-a06f8a9fdb4a/go.mod h1:45Rw+lb08NgLV7a48WH3LNLuDRGBwKmDa0w8L75vbec=
-github.com/ipld/go-car/v2 v2.9.1-0.20230406035547-a06f8a9fdb4a h1:hYGbVkFMjQ5TJauZ58vHMu2XlKXK2JvlXqS59syCGK4=
-github.com/ipld/go-car/v2 v2.9.1-0.20230406035547-a06f8a9fdb4a/go.mod h1:mBZ4d86IKvL7eKhNHhQgywQ5coZHAGhmG1P+cMrdby8=
+github.com/ipld/go-car/v2 v2.10.0 h1:0Wrt0uk3IoBge1PjEokXsS1eOX6v8QxeTxjPQ9TH71M=
+github.com/ipld/go-car/v2 v2.10.0/go.mod h1:mBZ4d86IKvL7eKhNHhQgywQ5coZHAGhmG1P+cMrdby8=
 github.com/ipld/go-codec-dagpb v1.6.0 h1:9nYazfyu9B1p3NAgfVdpRco3Fs2nFC72DqVsMj6rOcc=
 github.com/ipld/go-codec-dagpb v1.6.0/go.mod h1:ANzFhfP2uMJxRBr8CE+WQWs5UsNa0pYtmKZ+agnUw9s=
 github.com/ipld/go-ipld-prime v0.9.1-0.20210324083106-dc342a9917db/go.mod h1:KvBLMr4PX1gWptgkzRjVZCrLmSGcZCb/jioOQwCqZN8=
