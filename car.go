@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
@@ -118,15 +119,21 @@ func (cw *carWriter) writeNode(ctx context.Context, nd format.Node) error {
 	return util.LdWrite(cw.w, nd.Cid().Bytes(), nd.RawData())
 }
 
+var bufioReaderPool = sync.Pool{
+	New: func() any { return bufio.NewReader(nil) },
+}
+
 type CarReader struct {
-	br     *bufio.Reader
+	br     *bufio.Reader // set nil on EOF
 	Header *CarHeader
 }
 
 func NewCarReader(r io.Reader) (*CarReader, error) {
-	br := bufio.NewReader(r)
+	br := bufioReaderPool.Get().(*bufio.Reader)
+	br.Reset(r)
 	ch, err := ReadHeader(br)
 	if err != nil {
+		bufioReaderPool.Put(br)
 		return nil, err
 	}
 
@@ -145,8 +152,17 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 }
 
 func (cr *CarReader) Next() (blocks.Block, error) {
+	if cr.br == nil {
+		return nil, io.EOF
+	}
 	c, data, err := util.ReadNode(cr.br)
 	if err != nil {
+		if err == io.EOF {
+			// Common happy case: recycle the bufio.Reader.
+			// In the other error paths leaking it is fine.
+			bufioReaderPool.Put(cr.br)
+			cr.br = nil
+		}
 		return nil, err
 	}
 
