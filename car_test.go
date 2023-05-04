@@ -227,3 +227,27 @@ func TestBadHeaders(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkNewCarReader_small(b *testing.B) {
+	b.ReportAllocs()
+
+	fixture, err := hex.DecodeString(fixtureStr)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < b.N; i++ {
+		cr, err := car.NewCarReader(bytes.NewReader(fixture))
+		if err != nil {
+			b.Fatal(err)
+		}
+		for {
+			_, err := cr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
