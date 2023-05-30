@@ -20,6 +20,7 @@ import (
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
 	"github.com/ipld/go-car/v2/internal/carv1"
+	"github.com/ipld/go-car/v2/internal/store"
 	"github.com/ipld/go-car/v2/storage"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
@@ -1211,6 +1212,68 @@ func TestWholeCID(t *testing.T) {
 	}
 }
 
+func TestIndex(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		wantCIDs []cid.Cid
+	}{
+		{
+			"IndexCarV1",
+			"../testdata/sample-v1.car",
+			listCids(t, newV1ReaderFromV1File(t, "../testdata/sample-v1.car", false)),
+		},
+		{
+			"IndexCarV2",
+			"../testdata/sample-wrapped-v2.car",
+			listCids(t, newV1ReaderFromV2File(t, "../testdata/sample-wrapped-v2.car", false)),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.Open(tt.path)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, f.Close()) })
+			subject, err := storage.OpenReadable(f, carv2.UseWholeCIDs(true))
+			require.NoError(t, err)
+
+			idx := subject.Index()
+
+			for _, c := range tt.wantCIDs {
+				_, isIdentity, err := store.IsIdentity(c)
+				require.NoError(t, err)
+				if isIdentity {
+					// the index doesn't hold identity CIDs
+					continue
+				}
+				_, err = index.GetFirst(idx, c)
+				require.NoError(t, err)
+			}
+
+			if idx, ok := idx.(index.IterableIndex); ok {
+				expected := make([]multihash.Multihash, 0, len(tt.wantCIDs))
+				for _, c := range tt.wantCIDs {
+					_, isIdentity, err := store.IsIdentity(c)
+					require.NoError(t, err)
+					if isIdentity {
+						// the index doesn't hold identity CIDs
+						continue
+					}
+					expected = append(expected, c.Hash())
+				}
+
+				var got []multihash.Multihash
+				err = idx.ForEach(func(m multihash.Multihash, u uint64) error {
+					got = append(got, m)
+					return nil
+				})
+				require.NoError(t, err)
+				require.ElementsMatch(t, expected, got)
+			}
+		})
+	}
+}
+
 type writerOnly struct {
 	io.Writer
 }
@@ -1273,4 +1336,45 @@ func (b bufferReaderAt) ReadAt(p []byte, off int64) (int, error) {
 type simpleBlock struct {
 	cid  cid.Cid
 	data []byte
+}
+
+func newV1Reader(r io.Reader, zeroLenSectionAsEOF bool) (*carv1.CarReader, error) {
+	if zeroLenSectionAsEOF {
+		return carv1.NewCarReaderWithZeroLengthSectionAsEOF(r)
+	}
+	return carv1.NewCarReader(r)
+}
+
+func newV1ReaderFromV1File(t *testing.T, carv1Path string, zeroLenSectionAsEOF bool) *carv1.CarReader {
+	f, err := os.Open(carv1Path)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
+	v1r, err := newV1Reader(f, zeroLenSectionAsEOF)
+	require.NoError(t, err)
+	return v1r
+}
+
+func newV1ReaderFromV2File(t *testing.T, carv2Path string, zeroLenSectionAsEOF bool) *carv1.CarReader {
+	f, err := os.Open(carv2Path)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
+	v2r, err := carv2.NewReader(f)
+	require.NoError(t, err)
+	dr, err := v2r.DataReader()
+	require.NoError(t, err)
+	v1r, err := newV1Reader(dr, zeroLenSectionAsEOF)
+	require.NoError(t, err)
+	return v1r
+}
+
+func listCids(t *testing.T, v1r *carv1.CarReader) (cids []cid.Cid) {
+	for {
+		block, err := v1r.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		cids = append(cids, block.Cid())
+	}
+	return
 }

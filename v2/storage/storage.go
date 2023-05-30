@@ -30,6 +30,7 @@ type ReadableCar interface {
 	ipldstorage.ReadableStorage
 	ipldstorage.StreamingReadableStorage
 	Roots() []cid.Cid
+	Index() index.Index
 }
 
 // WritableCar is compatible with storage.WritableStorage but also returns
@@ -40,6 +41,7 @@ type ReadableCar interface {
 type WritableCar interface {
 	ipldstorage.WritableStorage
 	Roots() []cid.Cid
+	Index() index.Index
 	Finalize() error
 }
 
@@ -291,6 +293,12 @@ func (sc *StorageCar) init() (WritableCar, error) {
 // Roots returns the roots of the CAR.
 func (sc *StorageCar) Roots() []cid.Cid {
 	return sc.roots
+}
+
+// Index gives direct access to the index. It should be used with care.
+// Modifying the index may result corruption or invalid reads.
+func (sc *StorageCar) Index() index.Index {
+	return sc.idx
 }
 
 // Put adds a block to the CAR, where the block is identified by the given CID
