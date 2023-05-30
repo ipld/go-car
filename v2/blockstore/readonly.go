@@ -9,7 +9,6 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	format "github.com/ipfs/go-ipld-format"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
@@ -20,7 +19,20 @@ import (
 	"golang.org/x/exp/mmap"
 )
 
-var _ blockstore.Blockstore = (*ReadOnly)(nil)
+// Blockstore is compatible with github.com/ipfs/go-ipfs-blockstore.Blockstore
+// and github.com/ipfs/boxo/blockstore.Blockstore.
+type Blockstore interface {
+	DeleteBlock(context.Context, cid.Cid) error
+	Has(context.Context, cid.Cid) (bool, error)
+	Get(context.Context, cid.Cid) (blocks.Block, error)
+	GetSize(context.Context, cid.Cid) (int, error)
+	Put(context.Context, blocks.Block) error
+	PutMany(context.Context, []blocks.Block) error
+	AllKeysChan(ctx context.Context) (<-chan cid.Cid, error)
+	HashOnRead(enabled bool)
+}
+
+var _ Blockstore = (*ReadOnly)(nil)
 
 var (
 	errZeroLengthSection = fmt.Errorf("zero-length carv2 section not allowed by default; see WithZeroLengthSectionAsEOF option")

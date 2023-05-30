@@ -7,7 +7,6 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/index"
@@ -17,7 +16,7 @@ import (
 	"github.com/ipld/go-car/v2/internal/store"
 )
 
-var _ blockstore.Blockstore = (*ReadWrite)(nil)
+var _ Blockstore = (*ReadWrite)(nil)
 
 var (
 	errFinalized = fmt.Errorf("cannot write in a carv2 blockstore after finalize")
