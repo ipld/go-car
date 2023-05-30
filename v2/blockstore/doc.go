@@ -24,5 +24,5 @@
 // * blockstore.GetSize will always succeed, returning the multihash digest length of the given CID.
 // * blockstore.Put and blockstore.PutMany will always succeed without performing any operation unless car.StoreIdentityCIDs is enabled.
 //
-// See: https://pkg.go.dev/github.com/ipfs/go-ipfs-blockstore#NewIdStore
+// See: https://pkg.go.dev/github.com/ipfs/boxo/blockstore#NewIdStore
 package blockstore
