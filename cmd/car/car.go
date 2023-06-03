@@ -40,6 +40,10 @@ func main1() int {
 						Usage:     "The car file to write to",
 						TakesFile: true,
 					},
+					&cli.BoolFlag{
+						Name:  "no-wrap",
+						Usage: "Do not wrap the files in a directory",
+					},
 					&cli.IntFlag{
 						Name:  "version",
 						Value: 2,
