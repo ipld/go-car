@@ -31,6 +31,10 @@ func CreateCar(c *cli.Context) error {
 		return fmt.Errorf("a file destination must be specified")
 	}
 
+	if c.Bool("no-wrap") && c.Args().Len() > 1 {
+		return fmt.Errorf("no-wrap cannot be set with multiple source locations")
+	}
+
 	// make a cid with the right length that we eventually will patch with the root.
 	hasher, err := multihash.GetHasher(multihash.SHA2_256)
 	if err != nil {
@@ -59,7 +63,7 @@ func CreateCar(c *cli.Context) error {
 	}
 
 	// Write the unixfs blocks into the store.
-	root, err := writeFiles(c.Context, cdest, c.Args().Slice()...)
+	root, err := writeFiles(c.Context, c.Bool("no-wrap"), cdest, c.Args().Slice()...)
 	if err != nil {
 		return err
 	}
@@ -71,7 +75,7 @@ func CreateCar(c *cli.Context) error {
 	return car.ReplaceRootsInFile(c.String("file"), []cid.Cid{root})
 }
 
-func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) (cid.Cid, error) {
+func writeFiles(ctx context.Context, noWrap bool, bs *blockstore.ReadWrite, paths ...string) (cid.Cid, error) {
 	ls := cidlink.DefaultLinkSystem()
 	ls.TrustedStorage = true
 	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
@@ -106,6 +110,13 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 		l, size, err := builder.BuildUnixFSRecursive(p, &ls)
 		if err != nil {
 			return cid.Undef, err
+		}
+		if noWrap {
+			rcl, ok := l.(cidlink.Link)
+			if !ok {
+				return cid.Undef, fmt.Errorf("could not interpret %s", l)
+			}
+			return rcl.Cid, nil
 		}
 		name := path.Base(p)
 		entry, err := builder.BuildUnixFSDirectoryEntry(name, int64(size), l)
