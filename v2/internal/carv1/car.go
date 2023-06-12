@@ -11,7 +11,6 @@ import (
 	cid "github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
 	internalio "github.com/ipld/go-car/v2/internal/io"
 )
 
@@ -38,26 +37,6 @@ type CarHeader struct {
 type carWriter struct {
 	ds format.NodeGetter
 	w  io.Writer
-}
-
-func WriteCar(ctx context.Context, ds format.NodeGetter, roots []cid.Cid, w io.Writer) error {
-	h := &CarHeader{
-		Roots:   roots,
-		Version: 1,
-	}
-
-	if err := WriteHeader(h, w); err != nil {
-		return fmt.Errorf("failed to write car header: %s", err)
-	}
-
-	cw := &carWriter{ds: ds, w: w}
-	seen := cid.NewSet()
-	for _, r := range roots {
-		if err := merkledag.Walk(ctx, cw.enumGetLinks, r, seen.Visit); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func ReadHeaderAt(at io.ReaderAt, maxReadBytes uint64) (*CarHeader, error) {

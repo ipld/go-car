@@ -17,7 +17,6 @@ import (
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +30,7 @@ import (
 
 var (
 	rng                       = rand.New(rand.NewSource(1413))
-	oneTestBlockWithCidV1     = merkledag.NewRawNode([]byte("fish")).Block
+	oneTestBlockWithCidV1     = blocks.NewBlock([]byte("fish"))
 	anotherTestBlockWithCidV0 = blocks.NewBlock([]byte("barreleye"))
 )
 
@@ -40,7 +39,7 @@ func TestReadWriteGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) 
 	subject, err := blockstore.OpenReadWrite(path, []cid.Cid{})
 	t.Cleanup(func() { subject.Finalize() })
 	require.NoError(t, err)
-	nonExistingKey := merkledag.NewRawNode([]byte("undadasea")).Block.Cid()
+	nonExistingKey := blocks.NewBlock([]byte("undadasea")).Cid()
 
 	// Assert blockstore API returns blockstore.ErrNotFound
 	gotBlock, err := subject.Get(context.TODO(), nonExistingKey)
@@ -544,7 +543,7 @@ func TestReadWritePanicsOnlyWhenFinalized(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	oneTestBlockCid := oneTestBlockWithCidV1.Cid()
+	oneTestBlockCid := cid.NewCidV1(uint64(multicodec.Raw), oneTestBlockWithCidV1.Cid().Hash())
 	anotherTestBlockCid := anotherTestBlockWithCidV0.Cid()
 	wantRoots := []cid.Cid{oneTestBlockCid, anotherTestBlockCid}
 	path := filepath.Join(t.TempDir(), "readwrite-finalized-panic.car")
@@ -557,7 +556,7 @@ func TestReadWritePanicsOnlyWhenFinalized(t *testing.T) {
 
 	gotBlock, err := subject.Get(ctx, oneTestBlockCid)
 	require.NoError(t, err)
-	require.Equal(t, oneTestBlockWithCidV1, gotBlock)
+	require.Equal(t, oneTestBlockWithCidV1.Cid().Hash(), gotBlock.Cid().Hash())
 
 	gotSize, err := subject.GetSize(ctx, oneTestBlockCid)
 	require.NoError(t, err)
@@ -596,7 +595,7 @@ func TestReadWriteWithPaddingWorksAsExpected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	oneTestBlockCid := oneTestBlockWithCidV1.Cid()
+	oneTestBlockCid := cid.NewCidV1(uint64(multicodec.Raw), oneTestBlockWithCidV1.Cid().Hash())
 	anotherTestBlockCid := anotherTestBlockWithCidV0.Cid()
 	WantRoots := []cid.Cid{oneTestBlockCid, anotherTestBlockCid}
 	path := filepath.Join(t.TempDir(), "readwrite-with-padding.car")

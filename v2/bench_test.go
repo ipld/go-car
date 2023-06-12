@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-car/v2/blockstore"
 
 	carv2 "github.com/ipld/go-car/v2"
@@ -194,7 +194,7 @@ func generateRandomCarV2File(b *testing.B, path string, minTotalBlockSize int) {
 			b.Fatal(err)
 		}
 
-		blk := merkledag.NewRawNode(buf)
+		blk := blocks.NewBlock(buf)
 		if err := bs.Put(context.TODO(), blk); err != nil {
 			b.Fatal(err)
 		}

@@ -1,43 +1,47 @@
-package car
+package car_test
 
 import (
 	"context"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
 
+	car "github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/ipld/go-car/v2/index"
-	"github.com/ipld/go-car/v2/internal/carv1"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/storage/memstore"
 	"github.com/stretchr/testify/require"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
-	dstest "github.com/ipfs/go-merkledag/test"
-	"github.com/stretchr/testify/assert"
+	quickbuilder "github.com/ipfs/go-unixfsnode/data/builder/quick"
 )
 
 func TestWrapV1(t *testing.T) {
 	// Produce a CARv1 file to test wrapping with.
-	dagSvc := dstest.Mock()
-	src := filepath.Join(t.TempDir(), "unwrapped-test-v1.car")
-	sf, err := os.Create(src)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, sf.Close()) })
-	require.NoError(t, carv1.WriteCar(context.Background(), dagSvc, generateRootCid(t, dagSvc), sf))
+	sf, err := os.CreateTemp("", "example")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove(sf.Name())
+	_ = generateCar(t, sf)
 
 	// Wrap the test CARv1 file
-	dest := filepath.Join(t.TempDir(), "wrapped-test-v1.car")
-	df, err := os.Create(dest)
+	df, err := os.CreateTemp("", "wrapped-test-v1.car")
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, df.Close()) })
+	t.Cleanup(func() {
+		require.NoError(t, df.Close())
+		os.Remove(df.Name())
+	})
 	_, err = sf.Seek(0, io.SeekStart)
 	require.NoError(t, err)
-	require.NoError(t, WrapV1(sf, df))
+	require.NoError(t, car.WrapV1(sf, df))
 
 	// Assert wrapped file is valid CARv2 with CARv1 data payload matching the original CARv1 file.
-	subject, err := OpenReader(dest)
+	subject, err := car.OpenReader(df.Name())
 	t.Cleanup(func() { require.NoError(t, subject.Close()) })
 	require.NoError(t, err)
 
@@ -53,23 +57,25 @@ func TestWrapV1(t *testing.T) {
 	require.Equal(t, wantPayload, gotPayload)
 
 	// Assert embedded index in CARv2 is same as index generated from the original CARv1.
-	wantIdx, err := GenerateIndexFromFile(src)
+	wantIdx, err := car.GenerateIndexFromFile(sf.Name())
 	require.NoError(t, err)
 	ir, err := subject.IndexReader()
 	require.NoError(t, err)
 	gotIdx, err := index.ReadFrom(ir)
 	require.NoError(t, err)
 	require.Equal(t, wantIdx, gotIdx)
+	require.NoError(t, sf.Close())
 }
 
 func TestExtractV1(t *testing.T) {
 	// Produce a CARv1 file to test.
-	dagSvc := dstest.Mock()
-	v1Src := filepath.Join(t.TempDir(), "original-test-v1.car")
-	v1f, err := os.Create(v1Src)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, v1f.Close()) })
-	require.NoError(t, carv1.WriteCar(context.Background(), dagSvc, generateRootCid(t, dagSvc), v1f))
+	v1f, err := os.CreateTemp("", "example")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove(v1f.Name())
+	_ = generateCar(t, v1f)
+
 	_, err = v1f.Seek(0, io.SeekStart)
 	require.NoError(t, err)
 	wantV1, err := io.ReadAll(v1f)
@@ -77,62 +83,63 @@ func TestExtractV1(t *testing.T) {
 
 	// Wrap the produced CARv1 into a CARv2 to use for testing.
 	v2path := filepath.Join(t.TempDir(), "wrapped-for-extract-test-v2.car")
-	require.NoError(t, WrapV1File(v1Src, v2path))
+	require.NoError(t, car.WrapV1File(v1f.Name(), v2path))
 
 	// Assert extract from CARv2 file is as expected.
 	dstPath := filepath.Join(t.TempDir(), "extract-file-test-v1.car")
-	require.NoError(t, ExtractV1File(v2path, dstPath))
+	require.NoError(t, car.ExtractV1File(v2path, dstPath))
 	gotFromFile, err := os.ReadFile(dstPath)
 	require.NoError(t, err)
 	require.Equal(t, wantV1, gotFromFile)
 
 	// Assert extract from CARv2 file in-place is as expected
-	require.NoError(t, ExtractV1File(v2path, v2path))
+	require.NoError(t, car.ExtractV1File(v2path, v2path))
 	gotFromInPlaceFile, err := os.ReadFile(v2path)
 	require.NoError(t, err)
 	require.Equal(t, wantV1, gotFromInPlaceFile)
+
+	require.NoError(t, v1f.Close())
 }
 
 func TestExtractV1WithUnknownVersionIsError(t *testing.T) {
 	dstPath := filepath.Join(t.TempDir(), "extract-dst-file-test-v42.car")
-	err := ExtractV1File("testdata/sample-rootless-v42.car", dstPath)
+	err := car.ExtractV1File("testdata/sample-rootless-v42.car", dstPath)
 	require.EqualError(t, err, "source version must be 2; got: 42")
 }
 
 func TestExtractV1FromACarV1IsError(t *testing.T) {
 	dstPath := filepath.Join(t.TempDir(), "extract-dst-file-test-v1.car")
-	err := ExtractV1File("testdata/sample-v1.car", dstPath)
-	require.Equal(t, ErrAlreadyV1, err)
+	err := car.ExtractV1File("testdata/sample-v1.car", dstPath)
+	require.Equal(t, car.ErrAlreadyV1, err)
 }
 
-func generateRootCid(t *testing.T, adder format.NodeAdder) []cid.Cid {
-	// TODO convert this into a utility testing lib that takes an rng and generates a random DAG with some threshold for depth/breadth.
-	this := merkledag.NewRawNode([]byte("fish"))
-	that := merkledag.NewRawNode([]byte("lobster"))
-	other := merkledag.NewRawNode([]byte("🌊"))
+func generateCar(t *testing.T, tf *os.File) cid.Cid {
+	ls := cidlink.DefaultLinkSystem()
+	store := memstore.Store{Bag: make(map[string][]byte)}
+	ls.SetReadStorage(&store)
+	ls.SetWriteStorage(&store)
+	root := cid.Undef
+	quickbuilder.Store(&ls, func(b *quickbuilder.Builder) error {
+		n := b.NewMapDirectory(map[string]quickbuilder.Node{
+			"🍤": b.NewMapDirectory(map[string]quickbuilder.Node{
+				"fishmonger": b.NewBytesFile([]byte("fish")),
+				"another": b.NewMapDirectory(map[string]quickbuilder.Node{
+					"barreleye": b.NewBytesFile([]byte("lobster")),
+					"🐡":         b.NewBytesFile([]byte("lobster")),
+				}),
+			}),
+		})
+		root = n.Link().(cidlink.Link).Cid
+		return nil
+	})
 
-	one := &merkledag.ProtoNode{}
-	assertAddNodeLink(t, one, this, "fishmonger")
-
-	another := &merkledag.ProtoNode{}
-	assertAddNodeLink(t, another, one, "barreleye")
-	assertAddNodeLink(t, another, that, "🐡")
-
-	andAnother := &merkledag.ProtoNode{}
-	assertAddNodeLink(t, andAnother, another, "🍤")
-
-	assertAddNodes(t, adder, this, that, other, one, another, andAnother)
-	return []cid.Cid{andAnother.Cid()}
-}
-
-func assertAddNodeLink(t *testing.T, pn *merkledag.ProtoNode, fn format.Node, name string) {
-	assert.NoError(t, pn.AddNodeLink(name, fn))
-}
-
-func assertAddNodes(t *testing.T, adder format.NodeAdder, nds ...format.Node) {
-	for _, nd := range nds {
-		assert.NoError(t, adder.Add(context.Background(), nd))
+	bs, _ := blockstore.OpenReadWriteFile(tf, []cid.Cid{root}, blockstore.WriteAsCarV1(true))
+	for _, val := range store.Bag {
+		bs.Put(context.TODO(), blocks.NewBlock(val))
 	}
+	bs.Finalize()
+
+	return root
 }
 
 func TestReplaceRootsInFile(t *testing.T) {
@@ -171,20 +178,20 @@ func TestReplaceRootsInFile(t *testing.T) {
 		{
 			name:       "CARv1ZeroLenNonEmptyRootsOfDifferentSizeAreNotReplaced",
 			path:       "testdata/sample-v1-with-zero-len-section.car",
-			roots:      []cid.Cid{merkledag.NewRawNode([]byte("fish")).Cid()},
-			wantErrMsg: "current header size (61) must match replacement header size (59)",
+			roots:      []cid.Cid{blocks.NewBlock([]byte("fish")).Cid()},
+			wantErrMsg: "current header size (61) must match replacement header size (57)",
 		},
 		{
 			name:       "CARv2NonEmptyRootsOfDifferentSizeAreNotReplaced",
 			path:       "testdata/sample-wrapped-v2.car",
-			roots:      []cid.Cid{merkledag.NewRawNode([]byte("fish")).Cid()},
-			wantErrMsg: "current header size (61) must match replacement header size (59)",
+			roots:      []cid.Cid{blocks.NewBlock([]byte("fish")).Cid()},
+			wantErrMsg: "current header size (61) must match replacement header size (57)",
 		},
 		{
 			name:       "CARv2IndexlessNonEmptyRootsOfDifferentSizeAreNotReplaced",
 			path:       "testdata/sample-v2-indexless.car",
-			roots:      []cid.Cid{merkledag.NewRawNode([]byte("fish")).Cid()},
-			wantErrMsg: "current header size (61) must match replacement header size (59)",
+			roots:      []cid.Cid{blocks.NewBlock([]byte("fish")).Cid()},
+			wantErrMsg: "current header size (61) must match replacement header size (57)",
 		},
 		{
 			name:  "CARv1SameSizeRootsAreReplaced",
@@ -212,7 +219,7 @@ func TestReplaceRootsInFile(t *testing.T) {
 			// Make a copy of input files to preserve original for comparison.
 			// This also avoids modification files in testdata.
 			tmpCopy := requireTmpCopy(t, tt.path)
-			err := ReplaceRootsInFile(tmpCopy, tt.roots)
+			err := car.ReplaceRootsInFile(tmpCopy, tt.roots)
 			if tt.wantErrMsg != "" {
 				require.EqualError(t, err, tt.wantErrMsg)
 				return
@@ -234,9 +241,9 @@ func TestReplaceRootsInFile(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, wantStat.Size(), gotStat.Size())
 
-			wantReader, err := NewBlockReader(original, ZeroLengthSectionAsEOF(true))
+			wantReader, err := car.NewBlockReader(original, car.ZeroLengthSectionAsEOF(true))
 			require.NoError(t, err)
-			gotReader, err := NewBlockReader(target, ZeroLengthSectionAsEOF(true))
+			gotReader, err := car.NewBlockReader(target, car.ZeroLengthSectionAsEOF(true))
 			require.NoError(t, err)
 
 			// Assert roots are replaced.
