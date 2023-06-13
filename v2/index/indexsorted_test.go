@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/ipfs/go-merkledag"
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/multiformats/go-multicodec"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +14,7 @@ func TestSortedIndexCodec(t *testing.T) {
 }
 
 func TestIndexSorted_GetReturnsNotFoundWhenCidDoesNotExist(t *testing.T) {
-	nonExistingKey := merkledag.NewRawNode([]byte("lobstermuncher")).Block.Cid()
+	nonExistingKey := blocks.NewBlock([]byte("lobstermuncher")).Cid()
 	tests := []struct {
 		name    string
 		subject Index

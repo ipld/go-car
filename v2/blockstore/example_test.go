@@ -9,7 +9,6 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-merkledag"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 )
@@ -81,9 +80,9 @@ func ExampleOpenReadWrite() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	thisBlock := merkledag.NewRawNode([]byte("fish")).Block
-	thatBlock := merkledag.NewRawNode([]byte("lobster")).Block
-	andTheOtherBlock := merkledag.NewRawNode([]byte("barreleye")).Block
+	thisBlock := blocks.NewBlock([]byte("fish"))
+	thatBlock := blocks.NewBlock([]byte("lobster"))
+	andTheOtherBlock := blocks.NewBlock([]byte("barreleye"))
 
 	tdir, err := os.MkdirTemp(os.TempDir(), "example-*")
 	if err != nil {

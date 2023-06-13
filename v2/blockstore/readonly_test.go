@@ -11,7 +11,6 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ import (
 func TestReadOnlyGetReturnsBlockstoreNotFoundWhenCidDoesNotExist(t *testing.T) {
 	subject, err := OpenReadOnly("../testdata/sample-v1.car")
 	require.NoError(t, err)
-	nonExistingKey := merkledag.NewRawNode([]byte("lobstermuncher")).Block.Cid()
+	nonExistingKey := blocks.NewBlock([]byte("lobstermuncher")).Cid()
 
 	// Assert blockstore API returns blockstore.ErrNotFound
 	gotBlock, err := subject.Get(context.TODO(), nonExistingKey)

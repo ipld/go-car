@@ -10,8 +10,6 @@ import (
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
-	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
 	internalio "github.com/ipld/go-car/v2/internal/io"
 )
 
@@ -33,31 +31,6 @@ type ReadStore interface {
 type CarHeader struct {
 	Roots   []cid.Cid
 	Version uint64
-}
-
-type carWriter struct {
-	ds format.NodeGetter
-	w  io.Writer
-}
-
-func WriteCar(ctx context.Context, ds format.NodeGetter, roots []cid.Cid, w io.Writer) error {
-	h := &CarHeader{
-		Roots:   roots,
-		Version: 1,
-	}
-
-	if err := WriteHeader(h, w); err != nil {
-		return fmt.Errorf("failed to write car header: %s", err)
-	}
-
-	cw := &carWriter{ds: ds, w: w}
-	seen := cid.NewSet()
-	for _, r := range roots {
-		if err := merkledag.Walk(ctx, cw.enumGetLinks, r, seen.Visit); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func ReadHeaderAt(at io.ReaderAt, maxReadBytes uint64) (*CarHeader, error) {
@@ -108,23 +81,6 @@ func HeaderSize(h *CarHeader) (uint64, error) {
 	}
 
 	return util.LdSize(hb), nil
-}
-
-func (cw *carWriter) enumGetLinks(ctx context.Context, c cid.Cid) ([]*format.Link, error) {
-	nd, err := cw.ds.Get(ctx, c)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := cw.writeNode(ctx, nd); err != nil {
-		return nil, err
-	}
-
-	return nd.Links(), nil
-}
-
-func (cw *carWriter) writeNode(ctx context.Context, nd format.Node) error {
-	return util.LdWrite(cw.w, nd.Cid().Bytes(), nd.RawData())
 }
 
 type CarReader struct {
