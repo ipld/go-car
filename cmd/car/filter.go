@@ -42,13 +42,28 @@ func FilterCar(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("filtering to %d cids\n", len(cidMap))
+	if c.Bool("inverse") {
+		fmt.Printf("filtering out %d cids\n", len(cidMap))
+	} else {
+		fmt.Printf("filtering to %d cids\n", len(cidMap))
+	}
 
 	outRoots := make([]cid.Cid, 0)
 	for _, r := range rd.Roots {
-		if _, ok := cidMap[r]; ok {
+		if matchFilter(c, r, cidMap) {
 			outRoots = append(outRoots, r)
 		}
+	}
+
+	version := c.Int("version")
+	options := []carv2.Option{}
+	switch version {
+	case 1:
+		options = []carv2.Option{blockstore.WriteAsCarV1(true)}
+	case 2:
+		// already the default
+	default:
+		return fmt.Errorf("invalid CAR version %d", c.Int("version"))
 	}
 
 	outPath := c.Args().Get(1)
@@ -60,6 +75,10 @@ func FilterCar(c *cli.Context) error {
 			}
 		}
 	} else {
+		if version != 2 {
+			return fmt.Errorf("can only append to version 2 car files")
+		}
+
 		// roots will need to be whatever is in the output already.
 		cv2r, err := carv2.OpenReader(outPath)
 		if err != nil {
@@ -79,7 +98,7 @@ func FilterCar(c *cli.Context) error {
 		fmt.Fprintf(os.Stderr, "warning: no roots defined after filtering\n")
 	}
 
-	bs, err := blockstore.OpenReadWrite(outPath, outRoots)
+	bs, err := blockstore.OpenReadWrite(outPath, outRoots, options...)
 	if err != nil {
 		return err
 	}
@@ -92,13 +111,20 @@ func FilterCar(c *cli.Context) error {
 			}
 			return err
 		}
-		if _, ok := cidMap[blk.Cid()]; ok {
+		if matchFilter(c, blk.Cid(), cidMap) {
 			if err := bs.Put(c.Context, blk); err != nil {
 				return err
 			}
 		}
 	}
 	return bs.Finalize()
+}
+
+func matchFilter(ctx *cli.Context, c cid.Cid, cidMap map[cid.Cid]struct{}) bool {
+	if _, ok := cidMap[c]; ok {
+		return !ctx.Bool("inverse")
+	}
+	return ctx.Bool("inverse")
 }
 
 func parseCIDS(r io.Reader) (map[cid.Cid]struct{}, error) {

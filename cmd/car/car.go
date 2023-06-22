@@ -116,6 +116,16 @@ func main1() int {
 						Name:  "append",
 						Usage: "Append cids to an existing output file",
 					},
+					&cli.BoolFlag{
+						Name:  "inverse",
+						Usage: "Inverse the filter (this will remove cids from the car file)",
+						Value: false,
+					},
+					&cli.IntFlag{
+						Name:  "version",
+						Value: 2,
+						Usage: "Write output as a v1 or v2 format car",
+					},
 				},
 			},
 			{
