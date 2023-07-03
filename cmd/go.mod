@@ -16,7 +16,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.0.7
 	github.com/polydawn/refmt v0.89.0
-	github.com/rogpeppe/go-internal v1.10.0
+	github.com/rogpeppe/go-internal v1.11.0
 	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 )
@@ -72,6 +72,7 @@ require (
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/tools v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
