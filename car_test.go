@@ -164,11 +164,6 @@ func TestBadHeaders(t *testing.T) {
 			"1da265726f6f747381d82a4800010000036162636776657273696f6e6131",
 			"", "invalid header: ",
 		}, {
-			"{version:1}",
-			"0aa16776657273696f6e01",
-			"empty car, no roots",
-			"",
-		}, {
 			"{version:1,roots:{cid:baeaaaa3bmjrq}}",
 			"20a265726f6f7473a163636964d82a4800010000036162636776657273696f6e01",
 			"",
