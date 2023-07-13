@@ -141,10 +141,6 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 		return nil, fmt.Errorf("invalid car version: %d", ch.Version)
 	}
 
-	if len(ch.Roots) == 0 {
-		return nil, fmt.Errorf("empty car, no roots")
-	}
-
 	return &CarReader{
 		br:     br,
 		Header: ch,
