@@ -128,7 +128,27 @@ type CarReader struct {
 	Header *CarHeader
 }
 
-func NewCarReader(r io.Reader) (*CarReader, error) {
+type carReaderConfig struct {
+	allowEmptyRoots bool
+}
+
+type CarReaderOpt func(carReaderConfig)
+
+// CarReaderAllowEmptyRoots is an option that can be passed to NewCarReader to
+// change the behavior when reading a car file that does not have any root
+// cids set. With this option a reader will be returned, instead of an error.
+func CarReaderAllowEmptyRoot() CarReaderOpt {
+	return func(cr carReaderConfig) {
+		cr.allowEmptyRoots = true
+	}
+}
+
+func NewCarReader(r io.Reader, opts ...CarReaderOpt) (*CarReader, error) {
+	conf := carReaderConfig{}
+	for _, o := range opts {
+		o(conf)
+	}
+
 	br := bufioReaderPool.Get().(*bufio.Reader)
 	br.Reset(r)
 	ch, err := ReadHeader(br)
@@ -139,6 +159,10 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 
 	if ch.Version != 1 {
 		return nil, fmt.Errorf("invalid car version: %d", ch.Version)
+	}
+
+	if !conf.allowEmptyRoots && len(ch.Roots) == 0 {
+		return nil, fmt.Errorf("empty car, no roots")
 	}
 
 	return &CarReader{
