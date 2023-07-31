@@ -139,6 +139,52 @@ func TestEOFHandling(t *testing.T) {
 		}
 	})
 }
+func TestEmptyRootsInHeader(t *testing.T) {
+	testCases := []struct {
+		name              string
+		errorOnEmptyRoots bool
+		hex               string
+		errStr            string // either the whole error string
+	}{
+		{
+			"errorOnEmptyRoots:true",
+			true,
+			"0aa16776657273696f6e01",
+			"empty car, no roots",
+		}, {
+			"errorOnEmptyRoots:false",
+			false,
+			"0aa16776657273696f6e01",
+			"",
+		},
+	}
+
+	makeCar := func(t *testing.T, byts string, flag bool) error {
+		fixture, err := hex.DecodeString(byts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = car.NewCarReaderWithOptions(bytes.NewReader(fixture), car.WithErrorOnEmptyRoots(flag))
+		return err
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := makeCar(t, tc.hex, tc.errorOnEmptyRoots)
+			if err == nil && tc.errorOnEmptyRoots {
+				t.Fatal("expected error from empty roots, didn't get one")
+			}
+			if err != nil && !tc.errorOnEmptyRoots {
+				t.Fatal("expected no error from empty roots, but got one")
+			}
+			if tc.errStr != "" {
+				if err.Error() != tc.errStr {
+					t.Fatalf("bad error: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestBadHeaders(t *testing.T) {
 	testCases := []struct {
@@ -163,6 +209,11 @@ func TestBadHeaders(t *testing.T) {
 			"{version:\"1\",roots:[baeaaaa3bmjrq]}",
 			"1da265726f6f747381d82a4800010000036162636776657273696f6e6131",
 			"", "invalid header: ",
+		}, {
+			"{version:1}",
+			"0aa16776657273696f6e01",
+			"empty car, no roots",
+			"",
 		}, {
 			"{version:1,roots:{cid:baeaaaa3bmjrq}}",
 			"20a265726f6f7473a163636964d82a4800010000036162636776657273696f6e01",
