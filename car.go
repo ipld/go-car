@@ -124,11 +124,36 @@ var bufioReaderPool = sync.Pool{
 }
 
 type CarReader struct {
-	br     *bufio.Reader // set nil on EOF
-	Header *CarHeader
+	br                *bufio.Reader // set nil on EOF
+	Header            *CarHeader
+	errorOnEmptyRoots bool
+}
+
+type CarReaderOption func(*CarReader) error
+
+// WithErrorOnEmptyRoots is an option that can be passed to NewCarReader to
+// specify the behavior when reading a car file that does not have any root
+// cids set in the CAR header.
+// Setting this option to true will cause CarReader to error on CAR that has
+// no root CIDs listed in the header.
+func WithErrorOnEmptyRoots(flag bool) CarReaderOption {
+	return func(cr *CarReader) error {
+		cr.errorOnEmptyRoots = flag
+		return nil
+	}
 }
 
 func NewCarReader(r io.Reader) (*CarReader, error) {
+	// BACKWARD COMPATIBILITY NOTE:
+	// WithErrorOnEmptyRoots(true) here is the legacy behavior
+	// which we need to keep for reasons described in
+	// https://github.com/ipfs/specs/pull/402#issuecomment-1599428849
+	// (mainly, we need to migrate Filecoin code to use explicit
+	// WithErrorOnEmptyRoots(true) before we can change the default here).
+	return NewCarReaderWithOptions(r, WithErrorOnEmptyRoots(true))
+}
+
+func NewCarReaderWithOptions(r io.Reader, opts ...CarReaderOption) (*CarReader, error) {
 	br := bufioReaderPool.Get().(*bufio.Reader)
 	br.Reset(r)
 	ch, err := ReadHeader(br)
@@ -141,14 +166,23 @@ func NewCarReader(r io.Reader) (*CarReader, error) {
 		return nil, fmt.Errorf("invalid car version: %d", ch.Version)
 	}
 
-	if len(ch.Roots) == 0 {
+	carReader := &CarReader{
+		br:     br,
+		Header: ch,
+	}
+
+	for _, o := range opts {
+		err := o(carReader)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if carReader.errorOnEmptyRoots && len(ch.Roots) == 0 {
 		return nil, fmt.Errorf("empty car, no roots")
 	}
 
-	return &CarReader{
-		br:     br,
-		Header: ch,
-	}, nil
+	return carReader, nil
 }
 
 func (cr *CarReader) Next() (blocks.Block, error) {
