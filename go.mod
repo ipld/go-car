@@ -1,6 +1,6 @@
 module github.com/ipld/go-car
 
-go 1.19
+go 1.20
 
 require (
 	github.com/ipfs/go-block-format v0.1.2
