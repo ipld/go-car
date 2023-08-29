@@ -6,7 +6,7 @@ require (
 	github.com/ipfs/go-block-format v0.1.2
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-ipld-cbor v0.1.0
-	github.com/ipfs/go-ipld-format v0.5.0
+	github.com/ipfs/go-ipld-format v0.6.0
 	github.com/ipfs/go-merkledag v0.11.0
 	github.com/ipld/go-codec-dagpb v1.6.0
 	github.com/ipld/go-ipld-prime v0.21.0
