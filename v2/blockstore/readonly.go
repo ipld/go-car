@@ -55,6 +55,8 @@ type ReadOnly struct {
 	// will return errClosed to avoid panics or broken behavior.
 	closed bool
 
+	// The indexbacking contains the underlying data for index reads.
+	indexBacking io.ReaderAt
 	// The backing containing the data payload in CARv1 format.
 	backing io.ReaderAt
 
@@ -98,6 +100,7 @@ func NewReadOnly(backing io.ReaderAt, idx index.Index, opts ...carv2.Option) (*R
 				return nil, err
 			}
 		}
+		b.indexBacking = backing
 		b.backing = backing
 		b.idx = idx
 		return b, nil
@@ -129,6 +132,11 @@ func NewReadOnly(backing io.ReaderAt, idx index.Index, opts ...carv2.Option) (*R
 		b.backing, err = v2r.DataReader()
 		if err != nil {
 			return nil, err
+		}
+		if b.opts.AbsoluteIndexOffsets {
+			b.indexBacking = backing
+		} else {
+			b.indexBacking = b.backing
 		}
 		b.idx = idx
 		return b, nil
@@ -230,7 +238,7 @@ func (b *ReadOnly) Has(ctx context.Context, key cid.Cid) (bool, error) {
 	}
 
 	_, _, size, err := store.FindCid(
-		b.backing,
+		b.indexBacking,
 		b.idx,
 		key,
 		b.opts.BlockstoreUseWholeCIDs,
@@ -274,7 +282,7 @@ func (b *ReadOnly) Get(ctx context.Context, key cid.Cid) (blocks.Block, error) {
 	}
 
 	data, _, _, err := store.FindCid(
-		b.backing,
+		b.indexBacking,
 		b.idx,
 		key,
 		b.opts.BlockstoreUseWholeCIDs,
@@ -308,7 +316,7 @@ func (b *ReadOnly) GetSize(ctx context.Context, key cid.Cid) (int, error) {
 	}
 
 	_, _, size, err := store.FindCid(
-		b.backing,
+		b.indexBacking,
 		b.idx,
 		key,
 		b.opts.BlockstoreUseWholeCIDs,

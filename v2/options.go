@@ -57,6 +57,7 @@ type Options struct {
 
 	BlockstoreAllowDuplicatePuts bool
 	BlockstoreUseWholeCIDs       bool
+	AbsoluteIndexOffsets         bool
 	MaxTraversalLinks            uint64
 	WriteAsCarV1                 bool
 	TraversalPrototypeChooser    traversal.LinkTargetNodePrototypeChooser
@@ -236,5 +237,14 @@ func WriteAsCarV1(asCarV1 bool) Option {
 func AllowDuplicatePuts(allow bool) Option {
 	return func(o *Options) {
 		o.BlockstoreAllowDuplicatePuts = allow
+	}
+}
+
+// WithAbsoluteIndexOffsets is a read option which interprets index offsets as
+// absolute offsets from the beginning of the CARv2 file, instead of relative
+// offsets from the beginning of the Carv1 header.
+func WithAbsoluteIndexOffsets(absolute bool) Option {
+	return func(o *Options) {
+		o.AbsoluteIndexOffsets = absolute
 	}
 }

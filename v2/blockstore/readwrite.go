@@ -141,6 +141,7 @@ func OpenReadWriteFile(f *os.File, roots []cid.Cid, opts ...carv2.Option) (*Read
 		return nil, err
 	}
 	rwbs.ronly.backing = v1r
+	rwbs.ronly.indexBacking = v1r
 	rwbs.ronly.idx = rwbs.idx
 
 	if resume {
