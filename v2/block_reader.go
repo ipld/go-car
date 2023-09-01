@@ -1,6 +1,7 @@
 package car
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -23,6 +24,7 @@ type BlockReader struct {
 	// Used internally only, by BlockReader.Next during iteration over blocks.
 	r          io.Reader
 	offset     uint64
+	v1offset   uint64
 	readerSize int64
 	opts       Options
 }
@@ -80,7 +82,8 @@ func NewBlockReader(r io.Reader, opts ...Option) (*BlockReader, error) {
 		if _, err := rs.Seek(int64(v2h.DataOffset)-PragmaSize-HeaderSize, io.SeekCurrent); err != nil {
 			return nil, err
 		}
-		br.offset = uint64(v2h.DataOffset)
+		br.v1offset = uint64(v2h.DataOffset)
+		br.offset = br.v1offset
 		br.readerSize = int64(v2h.DataOffset + v2h.DataSize)
 
 		// Set br.r to a LimitReader reading from r limited to dataSize.
@@ -96,6 +99,8 @@ func NewBlockReader(r io.Reader, opts ...Option) (*BlockReader, error) {
 			return nil, fmt.Errorf("invalid data payload header version; expected 1, got %v", header.Version)
 		}
 		br.Roots = header.Roots
+		hs, _ := carv1.HeaderSize(header)
+		br.offset += hs
 	default:
 		// Otherwise, error out with invalid version since only versions 1 or 2 are expected.
 		return nil, fmt.Errorf("invalid car version: %d", br.Version)
@@ -136,10 +141,22 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 	return blocks.NewBlockWithCid(data, c)
 }
 
+// BlockMetadata contains metadata about a block's section in a CAR file/stream.
+//
+// There are two offsets for the block data which will be the same if the
+// original CAR is a CARv1, but will differ if the original CAR is a CARv2. In
+// the case of a CARv2, SourceOffset will be the offset from the beginning of
+// the file/steam, and Offset will be the offset from the beginning of the CARv1
+// payload container within the CARv2.
+//
+// Offset is useful for index generation which requires an offset from the CARv1
+// payload; while SourceOffset is useful for direct block reads out of the
+// source file/stream regardless of version.
 type BlockMetadata struct {
 	cid.Cid
-	Offset uint64
-	Size   uint64
+	Offset       uint64 // Offset of the block data in the container CARv1
+	SourceOffset uint64 // SourceOffset is the offset of block data in the source file/stream
+	Size         uint64
 }
 
 // SkipNext jumps over the next block, returning metadata about what it is (the CID, offset, and size).
@@ -148,24 +165,33 @@ type BlockMetadata struct {
 // If the underlying reader used by the BlockReader is actually a ReadSeeker, this method will attempt to
 // seek over the underlying data rather than reading it into memory.
 func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
-	sctSize, err := util.LdReadSize(br.r, br.opts.ZeroLengthSectionAsEOF, br.opts.MaxAllowedSectionSize)
+	sectionSize, err := util.LdReadSize(br.r, br.opts.ZeroLengthSectionAsEOF, br.opts.MaxAllowedSectionSize)
+	if err != nil {
+		return nil, err
+	}
+	if sectionSize == 0 {
+		_, _, err := cid.CidFromBytes([]byte{}) // generate zero-byte CID error
+		if err == nil {
+			panic("expected zero-byte CID error")
+		}
+		return nil, err
+	}
+
+	lenSize := uint64(varint.UvarintSize(sectionSize))
+
+	cidSize, c, err := cid.CidFromReader(io.LimitReader(br.r, int64(sectionSize)))
 	if err != nil {
 		return nil, err
 	}
 
-	if sctSize == 0 {
-		_, _, err := cid.CidFromBytes([]byte{})
-		return nil, err
-	}
+	blockSize := sectionSize - uint64(cidSize)
+	blockOffset := br.offset + lenSize + uint64(cidSize)
 
-	cidSize, c, err := cid.CidFromReader(io.LimitReader(br.r, int64(sctSize)))
-	if err != nil {
-		return nil, err
-	}
+	// move our reader forward; either by seeking or slurping
 
-	blkSize := sctSize - uint64(cidSize)
 	if brs, ok := br.r.(io.ReadSeeker); ok {
-		// carv1 and we don't know the size, so work it out and cache it
+		// carv1 and we don't know the size, so work it out and cache it so we
+		// can use it to determine over-reads
 		if br.readerSize == -1 {
 			cur, err := brs.Seek(0, io.SeekCurrent)
 			if err != nil {
@@ -180,42 +206,37 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 				return nil, err
 			}
 		}
-		// seek.
-		finalOffset, err := brs.Seek(int64(blkSize), io.SeekCurrent)
+
+		// seek forward past the block data
+		finalOffset, err := brs.Seek(int64(blockSize), io.SeekCurrent)
 		if err != nil {
 			return nil, err
 		}
-		if finalOffset != int64(br.offset)+int64(sctSize)+int64(varint.UvarintSize(sctSize)) {
-			return nil, fmt.Errorf("unexpected length")
+		if finalOffset != int64(br.offset)+int64(lenSize)+int64(sectionSize) {
+			return nil, errors.New("unexpected length")
 		}
 		if finalOffset > br.readerSize {
 			return nil, io.ErrUnexpectedEOF
 		}
-		br.offset = uint64(finalOffset)
-		return &BlockMetadata{
-			c,
-			uint64(finalOffset) - sctSize - uint64(varint.UvarintSize(sctSize)),
-			blkSize,
-		}, nil
+	} else { // just a reader, we need to slurp the block bytes
+		readCnt, err := io.CopyN(io.Discard, br.r, int64(blockSize))
+		if err != nil {
+			if err == io.EOF {
+				return nil, io.ErrUnexpectedEOF
+			}
+			return nil, err
+		}
+		if readCnt != int64(blockSize) {
+			return nil, errors.New("unexpected length")
+		}
 	}
 
-	// read to end.
-	readCnt, err := io.CopyN(io.Discard, br.r, int64(blkSize))
-	if err != nil {
-		if err == io.EOF {
-			return nil, io.ErrUnexpectedEOF
-		}
-		return nil, err
-	}
-	if readCnt != int64(blkSize) {
-		return nil, fmt.Errorf("unexpected length")
-	}
-	origOffset := br.offset
-	br.offset += uint64(varint.UvarintSize(sctSize)) + sctSize
+	br.offset = blockOffset + blockSize
 
 	return &BlockMetadata{
-		c,
-		origOffset,
-		blkSize,
+		Cid:          c,
+		Offset:       blockOffset - br.v1offset,
+		SourceOffset: blockOffset,
+		Size:         blockSize,
 	}, nil
 }

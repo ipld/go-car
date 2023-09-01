@@ -2,12 +2,14 @@ package car_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
 	"testing"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/internal/carv1"
@@ -227,6 +229,153 @@ func TestMaxHeaderLength(t *testing.T) {
 	// unsuccessful read, low allowable max header length (length - 3 because there are 2 bytes in the length varint prefix)
 	_, err = carv2.NewBlockReader(bytes.NewReader(headerBytes), carv2.MaxAllowedHeaderSize(uint64(len(headerBytes)-3)))
 	require.EqualError(t, err, "invalid header data, length of read beyond allowable maximum")
+}
+
+func TestBlockReader(t *testing.T) {
+	req := require.New(t)
+
+	// prepare a CARv1 with 100 blocks
+	roots := []cid.Cid{cid.MustParse("bafyrgqhai26anf3i7pips7q22coa4sz2fr4gk4q4sqdtymvvjyginfzaqewveaeqdh524nsktaq43j65v22xxrybrtertmcfxufdam3da3hbk")}
+	blks := make([]struct {
+		block      blocks.Block
+		dataOffset uint64
+	}, 100)
+	v1buf := new(bytes.Buffer)
+	carv1.WriteHeader(&carv1.CarHeader{Roots: roots, Version: 1}, v1buf)
+	vb := make([]byte, 2)
+	for i := 0; i < 100; i++ {
+		blk := randBlock(100 + i) // we should cross the varint two-byte boundary in here somewhere
+		vn := varint.PutUvarint(vb, uint64(len(blk.Cid().Bytes())+len(blk.RawData())))
+		n, err := v1buf.Write(vb[:vn])
+		req.NoError(err)
+		req.Equal(n, vn)
+		n, err = v1buf.Write(blk.Cid().Bytes())
+		req.NoError(err)
+		req.Equal(len(blk.Cid().Bytes()), n)
+		blks[i] = struct {
+			block      blocks.Block
+			dataOffset uint64
+		}{block: blk, dataOffset: uint64(v1buf.Len())}
+		n, err = v1buf.Write(blk.RawData())
+		req.NoError(err)
+		req.Equal(len(blk.RawData()), n)
+	}
+
+	v2buf := new(bytes.Buffer)
+	n, err := v2buf.Write(carv2.Pragma)
+	req.NoError(err)
+	req.Equal(len(carv2.Pragma), n)
+	v2Header := carv2.NewHeader(uint64(v1buf.Len()))
+	ni, err := v2Header.WriteTo(v2buf)
+	req.NoError(err)
+	req.Equal(carv2.HeaderSize, int(ni))
+	n, err = v2buf.Write(v1buf.Bytes())
+	req.NoError(err)
+	req.Equal(v1buf.Len(), n)
+
+	v2padbuf := new(bytes.Buffer)
+	n, err = v2padbuf.Write(carv2.Pragma)
+	req.NoError(err)
+	req.Equal(len(carv2.Pragma), n)
+	v2Header = carv2.NewHeader(uint64(v1buf.Len()))
+	// pad with 100 bytes
+	v2Header.DataOffset += 100
+	ni, err = v2Header.WriteTo(v2padbuf)
+	req.NoError(err)
+	req.Equal(carv2.HeaderSize, int(ni))
+	v2padbuf.Write(make([]byte, 100))
+	n, err = v2padbuf.Write(v1buf.Bytes())
+	req.NoError(err)
+	req.Equal(v1buf.Len(), n)
+
+	for _, testCase := range []struct {
+		name     string
+		reader   func() io.Reader
+		v1offset uint64
+	}{
+		{
+			name:   "v1",
+			reader: func() io.Reader { return &readerOnly{bytes.NewReader(v1buf.Bytes())} },
+		},
+		{
+			name:     "v2",
+			reader:   func() io.Reader { return &readerOnly{bytes.NewReader(v2buf.Bytes())} },
+			v1offset: uint64(carv2.PragmaSize + carv2.HeaderSize),
+		},
+		{
+			name:     "v2 padded",
+			reader:   func() io.Reader { return &readerOnly{bytes.NewReader(v2padbuf.Bytes())} },
+			v1offset: uint64(carv2.PragmaSize+carv2.HeaderSize) + 100,
+		},
+		{
+			name:   "v1 w/ReadSeeker",
+			reader: func() io.Reader { return bytes.NewReader(v1buf.Bytes()) },
+		},
+		{
+			name:     "v2 w/ReadSeeker",
+			reader:   func() io.Reader { return bytes.NewReader(v2buf.Bytes()) },
+			v1offset: uint64(carv2.PragmaSize + carv2.HeaderSize),
+		},
+		{
+			name:     "v2 padded w/ReadSeeker",
+			reader:   func() io.Reader { return bytes.NewReader(v2padbuf.Bytes()) },
+			v1offset: uint64(carv2.PragmaSize+carv2.HeaderSize) + 100,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			req := require.New(t)
+
+			car, err := carv2.NewBlockReader(testCase.reader())
+			req.NoError(err)
+			req.ElementsMatch(roots, car.Roots)
+
+			for i := 0; i < 100; i++ {
+				blk, err := car.Next()
+				req.NoError(err)
+				req.Equal(blks[i].block.Cid(), blk.Cid())
+				req.Equal(blks[i].block.RawData(), blk.RawData())
+			}
+			_, err = car.Next()
+			req.ErrorIs(err, io.EOF)
+
+			car, err = carv2.NewBlockReader(testCase.reader())
+			req.NoError(err)
+			req.ElementsMatch(roots, car.Roots)
+
+			for i := 0; i < 100; i++ {
+				blk, err := car.SkipNext()
+				req.NoError(err)
+				req.Equal(blks[i].block.Cid(), blk.Cid)
+				req.Equal(uint64(len(blks[i].block.RawData())), blk.Size)
+				req.Equal(blks[i].dataOffset, blk.Offset, "block #%d", i)
+				req.Equal(blks[i].dataOffset+testCase.v1offset, blk.SourceOffset)
+			}
+			_, err = car.Next()
+			req.ErrorIs(err, io.EOF)
+		})
+	}
+}
+
+type readerOnly struct {
+	r io.Reader
+}
+
+func (r readerOnly) Read(b []byte) (int, error) {
+	return r.r.Read(b)
+}
+
+func randBlock(l int) blocks.Block {
+	data := make([]byte, l)
+	rand.Read(data)
+	h, err := mh.Sum(data, mh.SHA2_512, -1)
+	if err != nil {
+		panic(err)
+	}
+	blk, err := blocks.NewBlockWithCid(data, cid.NewCidV1(cid.Raw, h))
+	if err != nil {
+		panic(err)
+	}
+	return blk
 }
 
 func requireReaderFromPath(t *testing.T, path string) io.Reader {
