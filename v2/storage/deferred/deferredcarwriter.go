@@ -41,7 +41,7 @@ var _ io.Closer = (*DeferredCarWriter)(nil)
 // HTTP headers in the assumption that the beginning of a valid CAR is about to
 // be streamed.
 type DeferredCarWriter struct {
-	root      cid.Cid
+	roots     []cid.Cid
 	outPath   string
 	outStream io.Writer
 
@@ -58,8 +58,8 @@ type DeferredCarWriter struct {
 //
 // No options are supplied to carstorage.NewWritable by default, add
 // the car.WriteAsCarV1(true) option to write a CARv1 file.
-func NewDeferredCarWriterForPath(root cid.Cid, outPath string, opts ...carv2.Option) *DeferredCarWriter {
-	return &DeferredCarWriter{root: root, outPath: outPath, opts: opts}
+func NewDeferredCarWriterForPath(outPath string, roots []cid.Cid, opts ...carv2.Option) *DeferredCarWriter {
+	return &DeferredCarWriter{roots: roots, outPath: outPath, opts: opts}
 }
 
 // NewDeferredCarWriterForStream creates a DeferredCarWriter that will write to
@@ -69,9 +69,9 @@ func NewDeferredCarWriterForPath(root cid.Cid, outPath string, opts ...carv2.Opt
 // The car.WriteAsCarV1(true) option will be supplied by default to
 // carstorage.NewWritable as CARv2 is not a valid streaming format due to the
 // header.
-func NewDeferredCarWriterForStream(root cid.Cid, outStream io.Writer, opts ...carv2.Option) *DeferredCarWriter {
+func NewDeferredCarWriterForStream(outStream io.Writer, roots []cid.Cid, opts ...carv2.Option) *DeferredCarWriter {
 	opts = append([]carv2.Option{carv2.WriteAsCarV1(true)}, opts...)
-	return &DeferredCarWriter{root: root, outStream: outStream, opts: opts}
+	return &DeferredCarWriter{roots: roots, outStream: outStream, opts: opts}
 }
 
 // OnPut will call a callback when each Put() operation is started. The argument
@@ -140,7 +140,7 @@ func (dcw *DeferredCarWriter) writer() (carstorage.WritableCar, error) {
 			dcw.f = openedFile
 			outStream = openedFile
 		}
-		w, err := carstorage.NewWritable(outStream, []cid.Cid{dcw.root}, dcw.opts...)
+		w, err := carstorage.NewWritable(outStream, dcw.roots, dcw.opts...)
 		if err != nil {
 			return nil, err
 		}
