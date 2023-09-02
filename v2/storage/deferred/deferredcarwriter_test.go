@@ -35,7 +35,7 @@ func TestDeferredCarWriterForPath(t *testing.T) {
 			if version == 1 {
 				opts = append(opts, carv2.WriteAsCarV1(true))
 			}
-			cw := deferred.NewDeferredCarWriterForPath(testCid1, tmpFile, opts...)
+			cw := deferred.NewDeferredCarWriterForPath(tmpFile, []cid.Cid{testCid1}, opts...)
 
 			_, err := os.Stat(tmpFile)
 			req.True(os.IsNotExist(err))
@@ -94,11 +94,11 @@ func TestDeferredCarWriter(t *testing.T) {
 			tmpFile := t.TempDir() + "/test.car"
 
 			if tc == "path" {
-				cw = deferred.NewDeferredCarWriterForPath(testCid1, tmpFile, carv2.WriteAsCarV1(true))
+				cw = deferred.NewDeferredCarWriterForPath(tmpFile, []cid.Cid{testCid1}, carv2.WriteAsCarV1(true))
 				_, err := os.Stat(tmpFile)
 				require.True(t, os.IsNotExist(err))
 			} else {
-				cw = deferred.NewDeferredCarWriterForStream(testCid1, &buf)
+				cw = deferred.NewDeferredCarWriterForStream(&buf, []cid.Cid{testCid1})
 				require.Equal(t, buf.Len(), 0)
 			}
 
@@ -169,7 +169,7 @@ func TestDeferredCarWriterPutCb(t *testing.T) {
 	testCid2, testData2 := randBlock()
 
 	var buf bytes.Buffer
-	cw := deferred.NewDeferredCarWriterForStream(testCid1, &buf)
+	cw := deferred.NewDeferredCarWriterForStream(&buf, []cid.Cid{testCid1})
 
 	var pc1 int
 	cw.OnPut(func(ii int) {
