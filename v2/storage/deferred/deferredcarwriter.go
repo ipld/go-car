@@ -29,6 +29,10 @@ var _ io.Closer = (*DeferredCarWriter)(nil)
 // DeferredCarWriter is threadsafe, and can be used concurrently.
 // Closing the writer will close, but not delete, the underlying file.
 //
+// DeferredCarWriter only implements the storage.WritableStorage interface and
+// is not intended as a general purpose storage implementation. It only supports
+// storage Put() and Get() operations.
+//
 // This utility is useful for cases where a CAR will be streamed but an error
 // may occur before any content is written. In this case, the CAR file will not
 // be created, and the output stream will not be written to. In the case of an
@@ -45,11 +49,12 @@ type DeferredCarWriter struct {
 	outPath   string
 	outStream io.Writer
 
-	lk    sync.Mutex
-	f     *os.File
-	w     carstorage.WritableCar
-	putCb []putCb
-	opts  []carv2.Option
+	lk     sync.Mutex
+	f      *os.File
+	closed bool
+	w      carstorage.WritableCar
+	putCb  []putCb
+	opts   []carv2.Option
 }
 
 // NewDeferredCarWriterForPath creates a DeferredCarWriter that will write to a
@@ -89,6 +94,10 @@ func (dcw *DeferredCarWriter) Has(ctx context.Context, key string) (bool, error)
 	dcw.lk.Lock()
 	defer dcw.lk.Unlock()
 
+	if dcw.closed {
+		return false, carstorage.ErrClosed
+	}
+
 	if dcw.w == nil { // shortcut, haven't written anything, don't even initialise
 		return false, nil
 	}
@@ -106,6 +115,10 @@ func (dcw *DeferredCarWriter) Has(ctx context.Context, key string) (bool, error)
 func (dcw *DeferredCarWriter) Put(ctx context.Context, key string, content []byte) error {
 	dcw.lk.Lock()
 	defer dcw.lk.Unlock()
+
+	if dcw.closed {
+		return carstorage.ErrClosed
+	}
 
 	if dcw.putCb != nil {
 		// call all callbacks, remove those that were only needed once
@@ -150,11 +163,18 @@ func (dcw *DeferredCarWriter) writer() (carstorage.WritableCar, error) {
 }
 
 // Close closes the underlying file, if one was created.
-func (dcw *DeferredCarWriter) Close() error {
+func (dcw *DeferredCarWriter) Close() (err error) {
 	dcw.lk.Lock()
 	defer dcw.lk.Unlock()
 
-	err := dcw.w.Finalize()
+	if dcw.closed {
+		return carstorage.ErrClosed
+	}
+	dcw.closed = true
+
+	if dcw.w != nil {
+		err = dcw.w.Finalize()
+	}
 
 	if dcw.f != nil {
 		defer func() { dcw.f = nil }()
@@ -163,6 +183,7 @@ func (dcw *DeferredCarWriter) Close() error {
 			err = err2
 		}
 	}
+
 	return err
 }
 
