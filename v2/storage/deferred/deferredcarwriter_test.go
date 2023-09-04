@@ -12,6 +12,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	carv2 "github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car/v2/storage"
 	deferred "github.com/ipld/go-car/v2/storage/deferred"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -216,6 +217,38 @@ func TestDeferredCarWriterPutCb(t *testing.T) {
 	require.Equal(t, 2, pc1)
 	require.Equal(t, 2, pc2)
 	require.Equal(t, 1, pc3)
+}
+
+func TestDeferredCarWriterWriteAfterClose(t *testing.T) {
+	req := require.New(t)
+
+	ctx := context.Background()
+	testCid1, testData1 := randBlock()
+	testCid2, testData2 := randBlock()
+
+	var buf bytes.Buffer
+	cw := deferred.NewDeferredCarWriterForStream(&buf, []cid.Cid{testCid1})
+	// no writes
+	req.NoError(cw.Close())
+
+	req.ErrorIs(cw.Put(ctx, testCid1.KeyString(), testData1), storage.ErrClosed)
+	_, err := cw.Has(ctx, testCid1.KeyString())
+	req.ErrorIs(err, storage.ErrClosed)
+	req.ErrorIs(cw.Close(), storage.ErrClosed)
+
+	// with writes
+
+	buf = bytes.Buffer{}
+	cw = deferred.NewDeferredCarWriterForStream(&buf, []cid.Cid{testCid1})
+
+	req.NoError(cw.Put(ctx, testCid1.KeyString(), testData1))
+	req.NoError(cw.Put(ctx, testCid2.KeyString(), testData2))
+	req.NoError(cw.Close())
+
+	req.ErrorIs(cw.Put(ctx, testCid1.KeyString(), testData1), storage.ErrClosed)
+	_, err = cw.Has(ctx, testCid1.KeyString())
+	req.ErrorIs(err, storage.ErrClosed)
+	req.ErrorIs(cw.Close(), storage.ErrClosed)
 }
 
 func randBlock() (cid.Cid, []byte) {

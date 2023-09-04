@@ -18,7 +18,7 @@ import (
 	ipldstorage "github.com/ipld/go-ipld-prime/storage"
 )
 
-var errClosed = errors.New("cannot use a CARv2 storage after closing")
+var ErrClosed = errors.New("cannot use a CAR storage after closing")
 
 type ReaderAtWriterAt interface {
 	io.ReaderAt
@@ -314,7 +314,7 @@ func (sc *StorageCar) Put(ctx context.Context, keyStr string, data []byte) error
 	defer sc.mu.Unlock()
 
 	if sc.closed {
-		return errClosed
+		return ErrClosed
 	}
 
 	idx, ok := sc.idx.(*index.InsertionIndex)
@@ -361,7 +361,7 @@ func (sc *StorageCar) Has(ctx context.Context, keyStr string) (bool, error) {
 	defer sc.mu.RUnlock()
 
 	if sc.closed {
-		return false, errClosed
+		return false, ErrClosed
 	}
 
 	if idx, ok := sc.idx.(*index.InsertionIndex); ok && sc.writer != nil {
@@ -443,7 +443,7 @@ func (sc *StorageCar) GetStream(ctx context.Context, keyStr string) (io.ReadClos
 	defer sc.mu.RUnlock()
 
 	if sc.closed {
-		return nil, errClosed
+		return nil, ErrClosed
 	}
 
 	_, offset, size, err := store.FindCid(
