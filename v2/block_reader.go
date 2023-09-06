@@ -143,19 +143,25 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 
 // BlockMetadata contains metadata about a block's section in a CAR file/stream.
 //
-// There are two offsets for the block data which will be the same if the
-// original CAR is a CARv1, but will differ if the original CAR is a CARv2. In
-// the case of a CARv2, SourceOffset will be the offset from the beginning of
+// There are two offsets for the block section which will be the same if the
+// original CAR is a CARv1, but will differ if the original CAR is a CARv2.
+//
+// The block section offset is position where the CAR section begins; that is,
+// the begining of the length prefix (varint) prior to the CID and the block
+// data. Reading the varint at the offset will give the length of the rest of
+// the section (CID+data).
+//
+// In the case of a CARv2, SourceOffset will be the offset from the beginning of
 // the file/steam, and Offset will be the offset from the beginning of the CARv1
 // payload container within the CARv2.
 //
 // Offset is useful for index generation which requires an offset from the CARv1
-// payload; while SourceOffset is useful for direct block reads out of the
+// payload; while SourceOffset is useful for direct section reads out of the
 // source file/stream regardless of version.
 type BlockMetadata struct {
 	cid.Cid
-	Offset       uint64 // Offset of the block data in the container CARv1
-	SourceOffset uint64 // SourceOffset is the offset of block data in the source file/stream
+	Offset       uint64 // Offset of the section data in the container CARv1
+	SourceOffset uint64 // SourceOffset is the offset of section data in the source file/stream
 	Size         uint64
 }
 
@@ -185,7 +191,7 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 	}
 
 	blockSize := sectionSize - uint64(cidSize)
-	blockOffset := br.offset + lenSize + uint64(cidSize)
+	blockOffset := br.offset
 
 	// move our reader forward; either by seeking or slurping
 
@@ -231,7 +237,7 @@ func (br *BlockReader) SkipNext() (*BlockMetadata, error) {
 		}
 	}
 
-	br.offset = blockOffset + blockSize
+	br.offset = br.offset + lenSize + uint64(cidSize) + blockSize
 
 	return &BlockMetadata{
 		Cid:          c,
