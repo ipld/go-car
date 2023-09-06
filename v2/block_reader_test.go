@@ -245,6 +245,10 @@ func TestBlockReader(t *testing.T) {
 	vb := make([]byte, 2)
 	for i := 0; i < 100; i++ {
 		blk := randBlock(100 + i) // we should cross the varint two-byte boundary in here somewhere
+		blks[i] = struct {
+			block      blocks.Block
+			dataOffset uint64
+		}{block: blk, dataOffset: uint64(v1buf.Len())}
 		vn := varint.PutUvarint(vb, uint64(len(blk.Cid().Bytes())+len(blk.RawData())))
 		n, err := v1buf.Write(vb[:vn])
 		req.NoError(err)
@@ -252,10 +256,6 @@ func TestBlockReader(t *testing.T) {
 		n, err = v1buf.Write(blk.Cid().Bytes())
 		req.NoError(err)
 		req.Equal(len(blk.Cid().Bytes()), n)
-		blks[i] = struct {
-			block      blocks.Block
-			dataOffset uint64
-		}{block: blk, dataOffset: uint64(v1buf.Len())}
 		n, err = v1buf.Write(blk.RawData())
 		req.NoError(err)
 		req.Equal(len(blk.RawData()), n)
