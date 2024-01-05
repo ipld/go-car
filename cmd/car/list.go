@@ -32,7 +32,7 @@ func ListCar(c *cli.Context) error {
 	}
 	defer outStream.Close()
 
-	if c.Bool("unixfs") {
+	if c.Bool("unixfs") || c.Bool("unixfs-blocks") {
 		return listUnixfs(c, outStream)
 	}
 
@@ -180,7 +180,12 @@ func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkS
 		for !i.Done() {
 			_, l := i.Next()
 			name := path.Join(prefix, l.Name.Must().String())
-			fmt.Fprintf(outStream, "%s\n", name)
+			if c.Bool("unixfs-blocks") {
+				cidL, _ := l.Hash.AsLink()
+				fmt.Fprintf(outStream, "%s %s\n", cidL.(cidlink.Link).Cid, name)
+			} else {
+				fmt.Fprintf(outStream, "%s\n", name)
+			}
 			// recurse into the file/directory
 			cl, err := l.Hash.AsLink()
 			if err != nil {
@@ -201,7 +206,12 @@ func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkS
 		i := hn.Iterator()
 		for !i.Done() {
 			n, l := i.Next()
-			fmt.Fprintf(outStream, "%s\n", path.Join(prefix, n.String()))
+			if c.Bool("unixfs-blocks") {
+				cl, _ := l.AsLink()
+				fmt.Fprintf(outStream, "%s %s\n", cl.(cidlink.Link).Cid, path.Join(prefix, n.String()))
+			} else {
+				fmt.Fprintf(outStream, "%s\n", path.Join(prefix, n.String()))
+			}
 			// recurse into the file/directory
 			cl, err := l.AsLink()
 			if err != nil {
