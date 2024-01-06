@@ -207,6 +207,10 @@ func main1() int {
 						Name:  "unixfs",
 						Usage: "List unixfs filesystem from the root of the car",
 					},
+					&cli.BoolFlag{
+						Name:  "unixfs-blocks",
+						Usage: "List blocks of unixfs objects in the car",
+					},
 				},
 			},
 			{
