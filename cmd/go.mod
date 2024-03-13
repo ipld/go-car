@@ -2,7 +2,6 @@ module github.com/ipld/go-car/cmd
 
 go 1.21
 
-
 require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ipfs/go-block-format v0.2.0
