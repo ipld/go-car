@@ -13,6 +13,7 @@ import (
 	"github.com/ipfs/go-unixfsnode"
 	"github.com/ipfs/go-unixfsnode/data"
 	"github.com/ipfs/go-unixfsnode/file"
+	carstorage "github.com/ipld/go-car/v2/storage"
 	dagpb "github.com/ipld/go-codec-dagpb"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -20,6 +21,30 @@ import (
 )
 
 var ErrNotDir = fmt.Errorf("not a directory")
+
+func ExtractFromFile(c context.Context, carPath string, outputDir string, logger io.Writer) error {
+	carFile, err := os.Open(carPath)
+	if err != nil {
+		return err
+	}
+	store, err := carstorage.OpenReadable(carFile)
+	if err != nil {
+		return err
+	}
+	roots := store.Roots()
+
+	ls := cidlink.DefaultLinkSystem()
+	ls.TrustedStorage = true
+	ls.SetReadStorage(store)
+
+	for _, root := range roots {
+		_, err = ExtractToDir(c, &ls, root, outputDir, []string{}, false, logger)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func ExtractToDir(c context.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir string, path []string, verbose bool, logger io.Writer) (int, error) {
 	if root.Prefix().Codec == cid.Raw {
