@@ -199,7 +199,7 @@ func writeCarV2(ctx context.Context, rootCid cid.Cid, output string, bs *blockst
 	return outStore.Finalize()
 }
 
-func writeCarV1(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, strict bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
+func writeCarV1(rootCid cid.Cid, output string, bs *blockstore.ReadOnly, _ bool, sel datamodel.Node, linkVisitOnlyOnce bool) error {
 	opts := make([]car.Option, 0)
 	if linkVisitOnlyOnce {
 		opts = append(opts, car.TraverseLinksOnlyOnce())
