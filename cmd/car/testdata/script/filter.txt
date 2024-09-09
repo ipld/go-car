@@ -21,6 +21,17 @@ car filter -append ${INPUTS}/sample-wrapped-v2.car out.car
 car list out.car
 stdout -count=4 '^bafy'
 
+# --cid-file arg
+car filter --cid-file filtersimpleunixfs.txt ${INPUTS}/simple-unixfs.car out.car
+stderr 'warning: no roots defined after filtering'
+car list out.car
+stdout -count=2 '^Qm'
+
+# --cid-file and --inverse args
+car filter --cid-file filtersimpleunixfs.txt --inverse ${INPUTS}/simple-unixfs.car out.car
+! stderr .
+car list out.car
+stdout -count=20 '^Qm'
 
 -- filteredcids.txt --
 bafy2bzacebohz654namrgmwjjx4qmtwgxixsd7pn4tlanyrc3g3hwj75hlxrw
@@ -28,3 +39,6 @@ bafy2bzaceaqtiesyfqd2jibmofz22oolguzf5wscwh73rmeypglfu2xhkptri
 bafy2bzacebct3dm7izgyauijzkaf3yd7ylni725k66rq7dfp3jr5ywhpprj3k
 -- filteredroot.txt --
 bafy2bzaced4ueelaegfs5fqu4tzsh6ywbbpfk3cxppupmxfdhbpbhzawfw5oy
+-- filtersimpleunixfs.txt --
+QmazwWa2vNLpy6WDBMjx7neWMbmn2oi9LQzCjan4kcGjBX
+QmVKt1VVkgfYcbSZqLD9sxZAkDpbH3L7RM6mJ6LHbkj5Bm
