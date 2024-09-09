@@ -21,8 +21,8 @@ func FilterCar(c *cli.Context) error {
 	var err error
 	// Get the set of CIDs from stdin.
 	inStream := os.Stdin
-	if c.IsSet("cidFile") {
-		inStream, err = os.Open(c.String("cidFile"))
+	if c.IsSet("cid-file") {
+		inStream, err = os.Open(c.String("cid-file"))
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ func FilterCar(c *cli.Context) error {
 		fmt.Printf("filtering to %d cids\n", len(cidMap))
 	}
 
-	return lib.FilterCar(c.Context, c.Args().First(), c.Args().Get(1), cidMap, c.Bool("invert"), c.Int("version"), c.Bool("append"))
+	return lib.FilterCar(c.Context, c.Args().First(), c.Args().Get(1), cidMap, c.Bool("inverse"), c.Int("version"), c.Bool("append"))
 }
 
 func parseCIDS(r io.Reader) (map[cid.Cid]struct{}, error) {
