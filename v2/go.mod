@@ -1,8 +1,6 @@
 module github.com/ipld/go-car/v2
 
-go 1.22.0
-
-toolchain go1.22.7
+go 1.22
 
 require (
 	github.com/ipfs/go-block-format v0.2.0
@@ -19,7 +17,7 @@ require (
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/stretchr/testify v1.9.0
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
-	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 )
 
 require (
