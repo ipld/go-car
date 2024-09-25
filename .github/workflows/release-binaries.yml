@@ -2,7 +2,10 @@ name: GoReleaser
 on:
   release:
     types: [ published ]
-
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Releaser]
+    types: [completed]
 jobs:
   bin-releaser:
     name: Release Binaries
@@ -15,12 +18,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.19.x"
+          go-version: "1.22.x"
       - name: Release Binaries
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
-          args: release --rm-dist
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

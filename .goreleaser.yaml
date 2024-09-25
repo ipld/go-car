@@ -1,3 +1,6 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+
+version: 2
 builds:
   - main: ./car
     dir: cmd
@@ -20,5 +23,4 @@ archives:
 release:
   mode: keep-existing
 changelog:
-  skip: true
-
+  disable: true
