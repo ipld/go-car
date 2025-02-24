@@ -7,7 +7,7 @@ require (
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-ipld-cbor v0.2.0
 	github.com/ipfs/go-ipld-format v0.6.0
-	github.com/ipfs/go-unixfsnode v1.9.2
+	github.com/ipfs/go-unixfsnode v1.10.0
 	github.com/ipld/go-codec-dagpb v1.7.0
 	github.com/ipld/go-ipld-prime v0.21.0
 	github.com/ipld/go-ipld-prime/storage/bsadapter v0.0.0-20230102063945-1a409dc236dd
@@ -17,7 +17,7 @@ require (
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/stretchr/testify v1.10.0
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 )
 
 require (
@@ -26,7 +26,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.24.0 // indirect
+	github.com/ipfs/boxo v0.27.4 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
 	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
