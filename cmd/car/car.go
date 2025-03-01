@@ -29,6 +29,24 @@ func main1() int {
 				},
 			},
 			{
+				Name:   "concat",
+				Usage:  "concatinate car file together",
+				Action: ConcatCar,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:      "output",
+						Aliases:   []string{"o", "f"},
+						Usage:     "The file to write to",
+						TakesFile: true,
+					},
+					&cli.IntFlag{
+						Name:  "version",
+						Value: 1,
+						Usage: "Write output as a v1 or v2 format car",
+					},
+				},
+			},
+			{
 				Name:    "create",
 				Usage:   "Create a car file",
 				Aliases: []string{"c"},
