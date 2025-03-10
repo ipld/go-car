@@ -10,9 +10,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"car": main1,
-	}))
+	testscript.Main(m, map[string]func(){
+		"car": main,
+	})
 }
 
 var update = flag.Bool("u", false, "update testscript output files")
