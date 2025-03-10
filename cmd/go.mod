@@ -17,7 +17,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7
 	github.com/polydawn/refmt v0.89.0
 	github.com/rogpeppe/go-internal v1.13.1
-	github.com/urfave/cli/v2 v2.27.5
+	github.com/urfave/cli/v2 v2.27.6
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 )
 
