@@ -342,7 +342,7 @@ func patch(ctx context.Context, c cid.Cid, blk []byte) ([]byte, error) {
 	// figure out number of lines.
 	lcnt := strings.Count(finalBuf.String(), "\n")
 	crStr := " (no-end-cr)"
-	if finalBuf.Bytes()[len(finalBuf.Bytes())-1] == '\n' {
+	if finalBuf.Len() > 0 && finalBuf.Bytes()[finalBuf.Len()-1] == '\n' {
 		crStr = ""
 	}
 
