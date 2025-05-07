@@ -7,11 +7,11 @@ import (
 	"io"
 	"sync"
 
+	"github.com/ipfs/boxo/ipld/merkledag"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
 
 	util "github.com/ipld/go-car/util"
 )

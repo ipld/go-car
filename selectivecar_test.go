@@ -5,11 +5,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ipfs/boxo/ipld/merkledag"
+	dstest "github.com/ipfs/boxo/ipld/merkledag/test"
 	blocks "github.com/ipfs/go-block-format"
 	cid "github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
-	dstest "github.com/ipfs/go-merkledag/test"
 	car "github.com/ipld/go-car"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal/selector"

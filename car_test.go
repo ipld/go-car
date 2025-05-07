@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ipfs/boxo/ipld/merkledag"
+	dstest "github.com/ipfs/boxo/ipld/merkledag/test"
 	"github.com/ipfs/go-cid"
 	format "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-merkledag"
-	dstest "github.com/ipfs/go-merkledag/test"
 	car "github.com/ipld/go-car"
 )
 
