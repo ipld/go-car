@@ -7,7 +7,7 @@ require (
 	github.com/ipfs/go-block-format v0.2.1
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-ipld-format v0.6.1
-	github.com/ipfs/go-unixfsnode v1.10.0
+	github.com/ipfs/go-unixfsnode v1.10.1
 	github.com/ipld/go-car v0.6.2
 	github.com/ipld/go-car/v2 v2.14.3
 	github.com/ipld/go-codec-dagpb v1.7.0
@@ -18,7 +18,7 @@ require (
 	github.com/polydawn/refmt v0.89.0
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/urfave/cli/v2 v2.27.6
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
+	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
 )
 
 require (
@@ -67,10 +67,10 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/tools v0.32.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	lukechampine.com/blake3 v1.4.0 // indirect
+	lukechampine.com/blake3 v1.4.1 // indirect
 )
