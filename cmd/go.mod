@@ -17,12 +17,12 @@ require (
 	github.com/multiformats/go-varint v0.0.7
 	github.com/polydawn/refmt v0.89.0
 	github.com/rogpeppe/go-internal v1.14.1
-	github.com/urfave/cli/v2 v2.27.6
+	github.com/urfave/cli/v2 v2.27.7
 	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
 )
 
 require (
-	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
