@@ -1,10 +1,10 @@
 module github.com/ipld/go-car
 
-go 1.23.8
+go 1.23.10
 
 require (
 	github.com/ipfs/boxo v0.32.0
-	github.com/ipfs/go-block-format v0.2.1
+	github.com/ipfs/go-block-format v0.2.2
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-ipld-cbor v0.2.0
 	github.com/ipfs/go-ipld-format v0.6.1
