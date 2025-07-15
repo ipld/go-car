@@ -3,7 +3,7 @@ module github.com/ipld/go-car
 go 1.23.10
 
 require (
-	github.com/ipfs/boxo v0.32.0
+	github.com/ipfs/boxo v0.33.0
 	github.com/ipfs/go-block-format v0.2.2
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-ipld-cbor v0.2.1
@@ -23,7 +23,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-datastore v0.8.2 // indirect
-	github.com/ipfs/go-ipld-legacy v0.2.1 // indirect
+	github.com/ipfs/go-ipld-legacy v0.2.2 // indirect
 	github.com/ipfs/go-log/v2 v2.6.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.3.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
