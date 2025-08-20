@@ -352,6 +352,23 @@ func TestBlockReader(t *testing.T) {
 			}
 			_, err = car.Next()
 			req.ErrorIs(err, io.EOF)
+
+			car, err = carv2.NewBlockReader(testCase.reader())
+			req.NoError(err)
+			req.ElementsMatch(roots, car.Roots)
+
+			for i := 0; i < 100; i++ {
+				cid, r, length, err := car.NextReader()
+				req.NoError(err)
+				req.Equal(blks[i].block.Cid(), cid)
+				req.Equal(uint64(len(blks[i].block.RawData())), length)
+				data := make([]byte, length)
+				_, err = io.ReadFull(r, data)
+				req.NoError(err)
+				req.Equal(blks[i].block.RawData(), data)
+			}
+			_, err = car.Next()
+			req.ErrorIs(err, io.EOF)
 		})
 	}
 }
