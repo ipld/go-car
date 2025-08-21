@@ -57,7 +57,6 @@ Here is a shortlist of other examples from the documentation
 
 ## Maintainers
 
-* [Masih Derkani](https://github.com/masih)
 * [Will Scott](https://github.com/willscott)
 
 ## Contribute
