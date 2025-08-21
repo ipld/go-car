@@ -36,6 +36,8 @@ func ReadNode(r io.Reader, zeroLenAsEOF bool, maxReadBytes uint64) (cid.Cid, []b
 
 // ReadNodeHeader returns the specified CID of the node and the length of data to be read.
 func ReadNodeHeader(r io.Reader, zeroLenAsEOF bool, maxReadBytes uint64) (cid.Cid, uint64, error) {
+	maxReadBytes = min(maxReadBytes, math.MaxInt64) // io.LimitReader doesn't support uint64
+
 	size, err := LdReadSize(r, zeroLenAsEOF, maxReadBytes)
 	if err != nil {
 		return cid.Cid{}, 0, err
@@ -49,10 +51,7 @@ func ReadNodeHeader(r io.Reader, zeroLenAsEOF bool, maxReadBytes uint64) (cid.Ci
 		return cid.Undef, 0, err
 	}
 
-	if size > math.MaxInt64 {
-		return cid.Cid{}, 0, ErrHeaderTooLarge
-	}
-	limitReader := io.LimitReader(r, int64(size))
+	limitReader := io.LimitReader(r, int64(size)) // safe due to the `min` above
 	n, c, err := cid.CidFromReader(limitReader)
 	if err != nil {
 		return cid.Cid{}, 0, err

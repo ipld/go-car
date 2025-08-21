@@ -148,7 +148,9 @@ func (br *BlockReader) Next() (blocks.Block, error) {
 // on the BlockReader.
 // The returned length might be larger than MaxAllowedSectionSize, it is up to the user to check before loading the data into memory.
 func (br *BlockReader) NextReader() (cid.Cid, io.Reader, uint64, error) {
-	c, length, err := util.ReadNodeHeader(br.r, br.opts.ZeroLengthSectionAsEOF, math.MaxUint64)
+	// we pass Math.MaxInt64 as io.LimitReader doesn't support uint64
+	// and we want unlimited size, as it is for the user of the function to read blocks of data without OOMing
+	c, length, err := util.ReadNodeHeader(br.r, br.opts.ZeroLengthSectionAsEOF, math.MaxInt64)
 	if err != nil {
 		return cid.Undef, nil, 0, err
 	}
