@@ -1,6 +1,6 @@
 module github.com/ipld/go-car/cmd
 
-go 1.24
+go 1.23.10
 
 require (
 	github.com/dustin/go-humanize v1.0.1
