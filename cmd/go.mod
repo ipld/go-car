@@ -14,7 +14,7 @@ require (
 	github.com/ipld/go-ipld-prime v0.21.0
 	github.com/multiformats/go-multicodec v0.9.2
 	github.com/multiformats/go-multihash v0.2.3
-	github.com/multiformats/go-varint v0.0.7
+	github.com/multiformats/go-varint v0.1.0
 	github.com/polydawn/refmt v0.89.0
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/urfave/cli/v2 v2.27.7
