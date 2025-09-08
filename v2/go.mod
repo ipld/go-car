@@ -15,7 +15,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.0.7
 	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11
 	golang.org/x/exp v0.0.0-20250606033433-dcc06ee1d476
 )
