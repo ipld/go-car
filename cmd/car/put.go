@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -8,7 +9,8 @@ import (
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	carv2 "github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car"
+	"github.com/ipld/go-car/util"
 	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
@@ -63,17 +65,92 @@ func PutCarBlock(c *cli.Context) error {
 		return fmt.Errorf("failed to create block: %w", err)
 	}
 
-	// Determine roots for the CAR file
-	var roots []cid.Cid
-	fileExists := false
+	// Get version
+	version := c.Int("version")
+	if version != 1 && version != 2 {
+		return fmt.Errorf("invalid CAR version %d", version)
+	}
 
+	// Check if file exists
+	fileExists := false
 	if _, err := os.Stat(carPath); err == nil {
 		fileExists = true
 		if setRoot {
 			return fmt.Errorf("cannot use --set-root when appending to existing file")
 		}
+	}
 
-		// Read existing roots from the file
+	// For CARv1, use naive concatenation approach
+	if version == 1 {
+		return putBlockV1(carPath, blk, blockCid, setRoot, fileExists)
+	}
+
+	// For CARv2, use the blockstore API
+	return putBlockV2(carPath, blk, blockCid, setRoot, fileExists)
+}
+
+// putBlockV1 appends a block to a CARv1 file using naive concatenation.
+func putBlockV1(carPath string, blk blocks.Block, blockCid cid.Cid, setRoot, fileExists bool) error {
+	if fileExists {
+		f, err := os.OpenFile(carPath, os.O_RDWR, 0o666)
+		if err != nil {
+			return fmt.Errorf("failed to open existing CAR file: %w", err)
+		}
+		defer f.Close()
+
+		br := bufio.NewReader(f)
+		header, err := car.ReadHeader(br)
+		if err != nil {
+			return fmt.Errorf("failed to read CAR header: %w", err)
+		}
+
+		if _, err := f.Seek(0, io.SeekEnd); err != nil {
+			return fmt.Errorf("failed to seek to end of file: %w", err)
+		}
+
+		if err := util.LdWrite(f, blockCid.Bytes(), blk.RawData()); err != nil {
+			return fmt.Errorf("failed to write block: %w", err)
+		}
+
+		fmt.Println(blockCid.String())
+		fmt.Fprintf(os.Stderr, "Block added to existing CAR file: %s (roots: %d)\n", carPath, len(header.Roots))
+		return nil
+	}
+
+	f, err := os.Create(carPath)
+	if err != nil {
+		return fmt.Errorf("failed to create CAR file: %w", err)
+	}
+	defer f.Close()
+
+	var roots []cid.Cid
+	if setRoot {
+		roots = []cid.Cid{blockCid}
+	} else {
+		roots = []cid.Cid{}
+	}
+
+	header := &car.CarHeader{
+		Roots:   roots,
+		Version: 1,
+	}
+	if err := car.WriteHeader(header, f); err != nil {
+		return fmt.Errorf("failed to write CAR header: %w", err)
+	}
+
+	if err := util.LdWrite(f, blockCid.Bytes(), blk.RawData()); err != nil {
+		return fmt.Errorf("failed to write block: %w", err)
+	}
+
+	fmt.Println(blockCid.String())
+	fmt.Fprintf(os.Stderr, "Created new CAR file: %s\n", carPath)
+	return nil
+}
+
+func putBlockV2(carPath string, blk blocks.Block, blockCid cid.Cid, setRoot, fileExists bool) error {
+	var roots []cid.Cid
+
+	if fileExists {
 		robs, err := blockstore.OpenReadOnly(carPath)
 		if err != nil {
 			return fmt.Errorf("failed to open existing CAR file: %w", err)
@@ -84,7 +161,6 @@ func PutCarBlock(c *cli.Context) error {
 			return fmt.Errorf("failed to read roots from existing CAR file: %w", err)
 		}
 	} else {
-		// New file
 		if setRoot {
 			roots = []cid.Cid{blockCid}
 		} else {
@@ -92,36 +168,21 @@ func PutCarBlock(c *cli.Context) error {
 		}
 	}
 
-	// Prepare options
-	var options []carv2.Option
-	switch c.Int("version") {
-	case 1:
-		options = append(options, blockstore.WriteAsCarV1(true))
-	case 2:
-		// default, no option needed
-	default:
-		return fmt.Errorf("invalid CAR version %d", c.Int("version"))
-	}
-
-	// Open blockstore for writing
-	bs, err := blockstore.OpenReadWrite(carPath, roots, options...)
+	bs, err := blockstore.OpenReadWrite(carPath, roots)
 	if err != nil {
 		return fmt.Errorf("failed to open CAR file for writing: %w", err)
 	}
 
-	// Put the block
 	ctx := context.Background()
 	if err := bs.Put(ctx, blk); err != nil {
 		bs.Discard()
 		return fmt.Errorf("failed to put block: %w", err)
 	}
 
-	// Finalize the blockstore
 	if err := bs.Finalize(); err != nil {
 		return fmt.Errorf("failed to finalize CAR file: %w", err)
 	}
 
-	// Output the CID
 	fmt.Println(blockCid.String())
 
 	if fileExists {
