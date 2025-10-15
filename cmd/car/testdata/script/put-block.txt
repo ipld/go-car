@@ -1,0 +1,54 @@
+# Create new CAR with default settings (raw codec, v2, no root)
+stdin hello.txt
+car put-block new.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+stderr 'Created new CAR file'
+
+# Verify block can be retrieved
+car get-block new.car bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4
+cmp stdout hello.txt
+
+# Append second block to existing CAR
+stdin world.txt
+car put-block new.car
+stdout 'bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q'
+stderr 'Block added to existing CAR file'
+
+# List both blocks
+car list new.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+stdout 'bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q'
+
+# Create CAR with block as root
+stdin hello.txt
+car put-block --set-root with-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Verify root is set
+car root with-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Error when using --set-root on existing file
+stdin world.txt
+! car put-block --set-root with-root.car
+stderr 'cannot use --set-root when appending to existing file'
+
+# Create CAR with dag-pb codec
+stdin hello.txt
+car put-block --codec dag-pb dagpb.car
+stdout 'bafybeifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Create CARv1 file
+stdin hello.txt
+car put-block --version 1 v1.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Short "pb" alias
+stdin hello.txt
+car pb alias.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+-- hello.txt --
+hello world
+-- world.txt --
+second block

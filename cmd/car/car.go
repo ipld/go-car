@@ -232,6 +232,29 @@ func main1() int {
 				},
 			},
 			{
+				Name:    "put-block",
+				Aliases: []string{"pb"},
+				Usage:   "Put a block into a car",
+				Action:  PutCarBlock,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "codec",
+						Aliases: []string{"c"},
+						Usage:   "Codec to use for CID generation (raw, dag-pb, dag-cbor, dag-json)",
+						Value:   "raw",
+					},
+					&cli.IntFlag{
+						Name:  "version",
+						Value: 2,
+						Usage: "Write output as a v1 or v2 format car",
+					},
+					&cli.BoolFlag{
+						Name:  "set-root",
+						Usage: "Set the block CID as the CAR root (only for new files)",
+					},
+				},
+			},
+			{
 				Name:   "root",
 				Usage:  "Get the root CID of a car",
 				Action: CarRoot,
