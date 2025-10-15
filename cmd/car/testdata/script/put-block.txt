@@ -67,6 +67,23 @@ stdin hello.txt
 car pb alias.car
 stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
 
+# Put block with known CID
+stdin hello.txt
+car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 cid-test.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+car get-block cid-test.car bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4
+cmp stdout hello.txt
+
+# CID mismatch error
+stdin world.txt
+! car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 fail.car
+stderr 'CID mismatch'
+
+# --cid and --codec are mutually exclusive
+stdin hello.txt
+! car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 --codec dag-pb fail.car
+stderr 'mutually exclusive'
+
 -- hello.txt --
 hello world
 -- world.txt --

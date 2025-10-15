@@ -25,44 +25,70 @@ func PutCarBlock(c *cli.Context) error {
 
 	carPath := c.Args().Get(0)
 	setRoot := c.Bool("set-root")
+	cidStr := c.String("cid")
+	codecName := c.String("codec")
 
-	// Read block data from stdin
+	if cidStr != "" && codecName != "raw" {
+		return fmt.Errorf("--cid and --codec are mutually exclusive (use one or the other)")
+	}
+
 	blockData, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return fmt.Errorf("failed to read block data from stdin: %w", err)
 	}
 
-	// Parse codec
-	codecName := c.String("codec")
-	var codecCode uint64
-	switch codecName {
-	case "raw":
-		codecCode = uint64(multicodec.Raw)
-	case "dag-pb":
-		codecCode = uint64(multicodec.DagPb)
-	case "dag-cbor":
-		codecCode = uint64(multicodec.DagCbor)
-	case "dag-json":
-		codecCode = uint64(multicodec.DagJson)
-	default:
-		return fmt.Errorf("unsupported codec: %s", codecName)
-	}
+	var blockCid cid.Cid
+	var blk blocks.Block
 
-	// Compute CID for the block
-	pref := cid.Prefix{
-		Version:  1,
-		Codec:    codecCode,
-		MhType:   multihash.SHA2_256,
-		MhLength: -1,
-	}
-	blockCid, err := pref.Sum(blockData)
-	if err != nil {
-		return fmt.Errorf("failed to compute CID: %w", err)
-	}
+	if cidStr != "" {
+		blockCid, err = cid.Parse(cidStr)
+		if err != nil {
+			return fmt.Errorf("failed to parse CID: %w", err)
+		}
 
-	blk, err := blocks.NewBlockWithCid(blockData, blockCid)
-	if err != nil {
-		return fmt.Errorf("failed to create block: %w", err)
+		computedCid, err := blockCid.Prefix().Sum(blockData)
+		if err != nil {
+			return fmt.Errorf("failed to compute CID: %w", err)
+		}
+
+		if !blockCid.Equals(computedCid) {
+			return fmt.Errorf("CID mismatch: expected %s, computed %s", blockCid, computedCid)
+		}
+
+		blk, err = blocks.NewBlockWithCid(blockData, blockCid)
+		if err != nil {
+			return fmt.Errorf("failed to create block: %w", err)
+		}
+	} else {
+		var codecCode uint64
+		switch codecName {
+		case "raw":
+			codecCode = uint64(multicodec.Raw)
+		case "dag-pb":
+			codecCode = uint64(multicodec.DagPb)
+		case "dag-cbor":
+			codecCode = uint64(multicodec.DagCbor)
+		case "dag-json":
+			codecCode = uint64(multicodec.DagJson)
+		default:
+			return fmt.Errorf("unsupported codec: %s", codecName)
+		}
+
+		pref := cid.Prefix{
+			Version:  1,
+			Codec:    codecCode,
+			MhType:   multihash.SHA2_256,
+			MhLength: -1,
+		}
+		blockCid, err = pref.Sum(blockData)
+		if err != nil {
+			return fmt.Errorf("failed to compute CID: %w", err)
+		}
+
+		blk, err = blocks.NewBlockWithCid(blockData, blockCid)
+		if err != nil {
+			return fmt.Errorf("failed to create block: %w", err)
+		}
 	}
 
 	// Get version

@@ -240,8 +240,12 @@ func main1() int {
 					&cli.StringFlag{
 						Name:    "codec",
 						Aliases: []string{"c"},
-						Usage:   "Codec to use for CID generation (raw, dag-pb, dag-cbor, dag-json)",
+						Usage:   "Codec to use for CID generation (raw, dag-pb, dag-cbor, dag-json). Mutually exclusive with --cid",
 						Value:   "raw",
+					},
+					&cli.StringFlag{
+						Name:  "cid",
+						Usage: "Expected CID of the block (codec will be extracted from CID). Mutually exclusive with --codec",
 					},
 					&cli.IntFlag{
 						Name:  "version",
