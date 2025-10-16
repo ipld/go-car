@@ -74,6 +74,7 @@ func PutCarBlock(c *cli.Context) error {
 			return fmt.Errorf("unsupported codec: %s", codecName)
 		}
 
+		// Currently only supporting CIDv1 with sha2-256 multihash
 		pref := cid.Prefix{
 			Version:  1,
 			Codec:    codecCode,
