@@ -1,0 +1,90 @@
+# Create new CAR with default settings (raw codec, v2, no root)
+stdin hello.txt
+car put-block new.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+stderr 'Created new CAR file'
+
+# Verify block can be retrieved
+car get-block new.car bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4
+cmp stdout hello.txt
+
+# Append second block to existing CAR
+stdin world.txt
+car put-block new.car
+stdout 'bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q'
+stderr 'Block added to existing CAR file'
+
+# List both blocks
+car list new.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+stdout 'bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q'
+
+# Create CAR with block as root
+stdin hello.txt
+car put-block --set-root with-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Verify root is set
+car root with-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Error when using --set-root on existing file
+stdin world.txt
+! car put-block --set-root with-root.car
+stderr 'cannot use --set-root when appending to existing file'
+
+# Create CAR with dag-pb codec
+stdin hello.txt
+car put-block --codec dag-pb dagpb.car
+stdout 'bafybeifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Create CARv1 file
+stdin hello.txt
+car put-block --version 1 v1.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Append second block to CARv1 file (tests naive concatenation)
+stdin world.txt
+car put-block --version 1 v1.car
+stdout 'bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q'
+stderr 'Block added to existing CAR file'
+
+# Verify both blocks can be retrieved from CARv1
+car get-block v1.car bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4
+cmp stdout hello.txt
+car get-block v1.car bafkreicyxldtjmy4vssak6mmqfijb27xiznflnxgu3nr2gevidlttaso3q
+cmp stdout world.txt
+
+# Create CARv1 with root
+stdin hello.txt
+car put-block --version 1 --set-root v1-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+car root v1-root.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Short "pb" alias
+stdin hello.txt
+car pb alias.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+
+# Put block with known CID
+stdin hello.txt
+car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 cid-test.car
+stdout 'bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4'
+car get-block cid-test.car bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4
+cmp stdout hello.txt
+
+# CID mismatch error
+stdin world.txt
+! car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 fail.car
+stderr 'CID mismatch'
+
+# --cid and --codec are mutually exclusive
+stdin hello.txt
+! car put-block --cid bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 --codec dag-pb fail.car
+stderr 'mutually exclusive'
+
+-- hello.txt --
+hello world
+-- world.txt --
+second block
