@@ -5,7 +5,7 @@ go 1.24.6
 require (
 	github.com/ipfs/boxo v0.35.1
 	github.com/ipfs/go-block-format v0.2.3
-	github.com/ipfs/go-cid v0.5.0
+	github.com/ipfs/go-cid v0.6.0
 	github.com/ipfs/go-ipld-cbor v0.2.1
 	github.com/ipfs/go-ipld-format v0.6.3
 	github.com/ipld/go-codec-dagpb v1.7.0
