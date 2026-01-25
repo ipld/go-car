@@ -21,6 +21,11 @@ require (
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621
 )
 
+replace (
+	github.com/ipld/go-car v0.6.3 => ..
+	github.com/ipld/go-car/v2 v2.16.0 => ../v2
+)
+
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/gammazero/chanqueue v1.1.1 // indirect
