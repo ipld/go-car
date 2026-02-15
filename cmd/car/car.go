@@ -1,6 +1,9 @@
+//go:generate sh -c "printf %s $(git describe --tags) > version.txt"
+
 package main
 
 import (
+	_ "embed"
 	"log"
 	"os"
 
@@ -8,12 +11,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+//go:embed version.txt
+var Version string
+
 func main() { os.Exit(main1()) }
 
 func main1() int {
 	app := &cli.App{
-		Name:  "car",
-		Usage: "Utility for working with car files",
+		Name:    "car",
+		Usage:   "Utility for working with car files",
+		Version: Version,
 		Commands: []*cli.Command{
 			{
 				Name:   "compile",
