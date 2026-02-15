@@ -32,7 +32,7 @@ func ListCar(c *cli.Context) error {
 	}
 	defer outStream.Close()
 
-	if c.Bool("unixfs") || c.Bool("unixfs-blocks") {
+	if c.Bool("unixfs") {
 		return listUnixfs(c, outStream)
 	}
 
@@ -59,9 +59,12 @@ func ListCar(c *cli.Context) error {
 			return err
 		}
 		if c.Bool("verbose") {
-			fmt.Fprintf(outStream, "%s: %s\n",
-				multicodec.Code(blk.Cid().Prefix().Codec).String(),
-				blk.Cid())
+			fmt.Fprintf(outStream, "%s", multicodec.Code(blk.Cid().Prefix().Codec).String())
+			if c.Bool("cids") {
+				fmt.Fprintf(outStream, ": %s", blk.Cid())
+			}
+			fmt.Fprintln(outStream)
+
 			if blk.Cid().Prefix().Codec == uint64(multicodec.DagPb) {
 				// parse as dag-pb
 				builder := dagpb.Type.PBNode.NewBuilder()
@@ -87,11 +90,6 @@ func ListCar(c *cli.Context) error {
 					max--
 					pbl, ok := l.(dagpb.PBLink)
 					if ok && max >= 0 {
-						hsh := "<unknown>"
-						lnk, ok := pbl.Hash.Link().(cidlink.Link)
-						if ok {
-							hsh = lnk.Cid.String()
-						}
 						name := "<no name>"
 						if pbl.Name.Exists() {
 							name = pbl.Name.Must().String()
@@ -100,7 +98,20 @@ func ListCar(c *cli.Context) error {
 						if pbl.Tsize.Exists() {
 							size = int(pbl.Tsize.Must().Int())
 						}
-						fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", name, humanize.Bytes(uint64(size)), hsh)
+						fmt.Fprintf(outStream, "\t\t%s[%s]", name, humanize.Bytes(uint64(size)))
+
+						if c.Bool("cids") {
+							hsh := "<unknown>"
+
+							lnk, ok := pbl.Hash.Link().(cidlink.Link)
+							if ok {
+								hsh = lnk.Cid.String()
+							}
+
+							fmt.Fprintf(outStream, " %s", hsh)
+						}
+
+						fmt.Fprintln(outStream)
 					}
 				}
 				if max < 0 {
@@ -114,7 +125,7 @@ func ListCar(c *cli.Context) error {
 				}
 				fmt.Fprintf(outStream, "\tUnixfs %s\n", data.DataTypeNames[ufd.FieldDataType().Int()])
 			}
-		} else {
+		} else if c.Bool("cids") {
 			fmt.Fprintf(outStream, "%s\n", blk.Cid())
 		}
 	}
@@ -175,12 +186,15 @@ func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkS
 		return err
 	}
 
+	// only show CIDs if explicitly requested
+	printCids := c.IsSet("cids") && c.Bool("cids")
+
 	if ufd.FieldDataType().Int() == data.Data_Directory {
 		i := pbnode.Links.Iterator()
 		for !i.Done() {
 			_, l := i.Next()
 			name := path.Join(prefix, l.Name.Must().String())
-			if c.Bool("unixfs-blocks") {
+			if printCids {
 				cidL, _ := l.Hash.AsLink()
 				fmt.Fprintf(outStream, "%s %s\n", cidL.(cidlink.Link).Cid, name)
 			} else {
@@ -206,7 +220,7 @@ func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkS
 		i := hn.Iterator()
 		for !i.Done() {
 			n, l := i.Next()
-			if c.Bool("unixfs-blocks") {
+			if printCids {
 				cl, _ := l.AsLink()
 				fmt.Fprintf(outStream, "%s %s\n", cl.(cidlink.Link).Cid, path.Join(prefix, n.String()))
 			} else {

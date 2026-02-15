@@ -213,21 +213,23 @@ func main1() int {
 			{
 				Name:    "list",
 				Aliases: []string{"l", "ls"},
-				Usage:   "List the CIDs in a car",
+				Usage:   "List the blocks in a car",
 				Action:  ListCar,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:    "verbose",
 						Aliases: []string{"v"},
-						Usage:   "Include verbose information about contained blocks",
+						Usage:   "Show verbose information about contained blocks",
+					},
+					&cli.BoolFlag{
+						Name:        "cids",
+						Value:       true,
+						Usage:       "Include CIDs",
+						DefaultText: "true except for unixfs",
 					},
 					&cli.BoolFlag{
 						Name:  "unixfs",
-						Usage: "List unixfs filesystem from the root of the car",
-					},
-					&cli.BoolFlag{
-						Name:  "unixfs-blocks",
-						Usage: "List blocks of unixfs objects in the car",
+						Usage: "Show unixfs filesystem (full paths)",
 					},
 				},
 			},
