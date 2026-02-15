@@ -227,6 +227,13 @@ func main1() int {
 						Usage:       "Include CIDs",
 						DefaultText: "true except for unixfs",
 					},
+					&cli.StringFlag{
+						Name:        "sizes",
+						Aliases:     []string{"s"},
+						Usage:       "Include sizes (specify \"human\" or \"bytes\")",
+						Value:       "",
+						DefaultText: "human for verbose, none otherwise",
+					},
 					&cli.BoolFlag{
 						Name:  "unixfs",
 						Usage: "Show unixfs filesystem (full paths)",
