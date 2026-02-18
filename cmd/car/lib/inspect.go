@@ -3,7 +3,6 @@ package lib
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -123,15 +122,6 @@ func InspectCar(inStream *os.File, verifyHashes bool) (*Report, error) {
 	stats, err := rd.Inspect(verifyHashes)
 	if err != nil {
 		return nil, err
-	}
-
-	if stats.Version == 1 && verifyHashes { // check that we've read all the data
-		got, err := inStream.Read(make([]byte, 1)) // force EOF
-		if err != nil && err != io.EOF {
-			return nil, err
-		} else if got > 0 {
-			return nil, fmt.Errorf("unexpected data after EOF: %d", got)
-		}
 	}
 
 	rep := Report{
