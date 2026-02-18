@@ -1,7 +1,13 @@
 car inspect ${INPUTS}/sample-v1.car
 cmp stdout v1inspect.txt
 
+car inspect --full ${INPUTS}/sample-v1.car
+cmp stdout v1inspect.txt
+
 car inspect ${INPUTS}/sample-wrapped-v2.car
+cmp stdout v2inspect.txt
+
+car inspect --full ${INPUTS}/sample-wrapped-v2.car
 cmp stdout v2inspect.txt
 
 ! car inspect ${INPUTS}/badheaderlength.car
