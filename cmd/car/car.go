@@ -100,23 +100,21 @@ func main1() int {
 				}},
 			},
 			{
-				Name:      "extract",
-				Aliases:   []string{"x"},
-				Usage:     "Extract the contents of a car when the car encodes UnixFS data",
-				Action:    ExtractCar,
-				ArgsUsage: "[output directory|-]",
+				Name:    "extract",
+				Aliases: []string{"x"},
+				Usage:   "Extract the contents of a car when the car encodes UnixFS data",
+				Action:  ExtractCar,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:      "file",
-						Aliases:   []string{"f"},
-						Usage:     "The car file to extract from, or stdin if omitted",
-						Required:  false,
+						Aliases:   []string{"f", "input", "i"},
+						Usage:     "The car file to extract from",
 						TakesFile: true,
 					},
 					&cli.StringFlag{
-						Name:     "path",
-						Aliases:  []string{"p"},
-						Usage:    "The unixfs path to extract",
+						Name:     "output",
+						Aliases:  []string{"o"},
+						Usage:    "The path to write into",
 						Required: false,
 					},
 					&cli.BoolFlag{

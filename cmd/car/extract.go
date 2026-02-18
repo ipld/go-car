@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -22,68 +21,57 @@ var ErrNotDir = fmt.Errorf("not a directory")
 
 // ExtractCar pulls files and directories out of a car
 func ExtractCar(c *cli.Context) error {
+	if !c.IsSet("file") {
+		return fmt.Errorf("a file source must be specified")
+	}
+
 	outputDir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if c.Args().Present() {
-		outputDir = c.Args().First()
+	if c.IsSet("output") {
+		outputDir = c.String("output")
 	}
 
 	var store storage.ReadableStorage
 	var roots []cid.Cid
 
-	if c.String("file") == "" {
-		if f, ok := c.App.Reader.(*os.File); ok {
-			stat, err := f.Stat()
-			if err != nil {
-				return err
-			}
-			if (stat.Mode() & os.ModeCharDevice) != 0 {
-				// Is a terminal. In reality the user is unlikely to actually paste
-				// CAR data into this terminal, but this message may serve to make
-				// them aware that they can/should pipe data into this command.
-				stopKeys := "Ctrl+D"
-				if runtime.GOOS == "windows" {
-					stopKeys = "Ctrl+Z, Enter"
-				}
-				fmt.Fprintf(c.App.ErrWriter, "Reading from stdin; use %s to end\n", stopKeys)
-			}
-		}
-		var err error
-		store, roots, err = NewStdinReadStorage(c.App.Reader)
-		if err != nil {
-			return err
-		}
-	} else {
-		carFile, err := os.Open(c.String("file"))
-		if err != nil {
-			return err
-		}
-		store, err = carstorage.OpenReadable(carFile)
-		if err != nil {
-			return err
-		}
-		roots = store.(carstorage.ReadableCar).Roots()
+	carFile, err := os.Open(c.String("file"))
+	if err != nil {
+		return err
 	}
+	store, err = carstorage.OpenReadable(carFile)
+	if err != nil {
+		return err
+	}
+	roots = store.(carstorage.ReadableCar).Roots()
 
 	ls := cidlink.DefaultLinkSystem()
 	ls.TrustedStorage = true
 	ls.SetReadStorage(store)
 
-	path, err := pathSegments(c.String("path"))
-	if err != nil {
-		return err
+	paths := c.Args().Slice()
+	if len(paths) == 0 {
+		paths = append(paths, "")
 	}
 
 	var extractedFiles int
-	for _, root := range roots {
-		count, err := lib.ExtractToDir(c.Context, &ls, root, outputDir, path, c.IsSet("verbose"), c.App.ErrWriter)
+
+	for _, p := range paths {
+		path, err := pathSegments(p)
 		if err != nil {
 			return err
 		}
-		extractedFiles += count
+
+		for _, root := range roots {
+			count, err := lib.ExtractToDir(c.Context, &ls, root, outputDir, path, c.IsSet("verbose"), c.App.ErrWriter)
+			if err != nil {
+				return err
+			}
+			extractedFiles += count
+		}
 	}
+
 	if extractedFiles == 0 {
 		return cli.Exit("no files extracted", 1)
 	} else {

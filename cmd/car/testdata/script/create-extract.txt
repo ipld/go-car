@@ -1,6 +1,6 @@
 car create --file=out.car foo.txt bar.txt
 mkdir out
-car extract -v -f out.car out
+car extract -v -f out.car -o out
 stderr -count=2 'txt$'
 stderr -count=1 '^extracted 2 file\(s\)$'
 car create --file=out2.car out/foo.txt out/bar.txt
