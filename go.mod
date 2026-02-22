@@ -1,6 +1,6 @@
 module github.com/ipld/go-car
 
-go 1.24.6
+go 1.25
 
 require (
 	github.com/ipfs/boxo v0.36.0
