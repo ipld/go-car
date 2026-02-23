@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/ipfs/go-cid"
+	_ "github.com/ipfs/go-ipld-git"
 	"github.com/ipld/go-car/cmd/car/lib"
 	"github.com/ipld/go-car/v2"
 	carstorage "github.com/ipld/go-car/v2/storage"

@@ -102,7 +102,7 @@ func main1() int {
 			{
 				Name:      "extract",
 				Aliases:   []string{"x"},
-				Usage:     "Extract the contents of a car when the car encodes UnixFS data",
+				Usage:     "Extract the contents of a car when the car encodes UnixFS or Git data",
 				Action:    ExtractCar,
 				ArgsUsage: "[output directory|-]",
 				Flags: []cli.Flag{
