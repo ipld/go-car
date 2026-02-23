@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	_ "github.com/ipfs/go-ipld-git"
 	dagpb "github.com/ipld/go-codec-dagpb"
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/cbor"

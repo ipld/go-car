@@ -1,0 +1,8 @@
+env TREE_CID='baf4bcfe6bkemw5kpijnvfjzm575jntlvrqnfhky'
+env BLOB_CID='baf4bcfgoae3ckaylvdn2sbxxk2lh7hu4uokemsq'
+car get-dag ${INPUTS}/sample-git-raw.car ${TREE_CID} out.car
+! stderr .
+car list out.car
+! stderr .
+stdout ${TREE_CID}
+stdout ${BLOB_CID}
