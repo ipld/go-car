@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -52,6 +53,29 @@ func ExtractToDir(c context.Context, ls *ipld.LinkSystem, root cid.Cid, outputDi
 			fmt.Fprintf(logger, "skipping raw root %s\n", root)
 		}
 		return 0, nil
+	}
+
+	if root.Prefix().Codec == cid.GitRaw {
+		nd, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: root}, basicnode.Prototype.Any)
+		if err != nil {
+			return 0, err
+		}
+		var outputResolvedDir string
+		if outputDir != "-" {
+			outputResolvedDir, err = filepath.EvalSymlinks(outputDir)
+			if err != nil {
+				return 0, err
+			}
+		}
+		if nd.Kind() == ipld.Kind_Bytes {
+			// Root is a bare git blob; extract it as a single file.
+			var outputName string
+			if outputDir != "-" {
+				outputName = filepath.Join(outputResolvedDir, "unknown")
+			}
+			return 1, extractGitBlob(nd, outputName)
+		}
+		return extractGitDir(c, ls, nd, outputResolvedDir, "/", path, verbose, logger)
 	}
 
 	pbn, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: root}, dagpb.Type.PBNode)
@@ -297,5 +321,129 @@ func extractFile(c context.Context, ls *ipld.LinkSystem, n ipld.Node, outputName
 		defer f.Close()
 	}
 	_, err = io.Copy(f, nlr)
+	return err
+}
+
+// extractGitDir extracts a git-raw tree node to a directory, following the
+// same path-filtering and output conventions as extractDir.
+func extractGitDir(c context.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, outputPath string, matchPath []string, verbose bool, logger io.Writer) (int, error) {
+	if n.Kind() != ipld.Kind_Map {
+		return 0, ErrNotDir
+	}
+
+	if outputRoot != "" {
+		dirPath, err := resolvePath(outputRoot, outputPath)
+		if err != nil {
+			return 0, err
+		}
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			return 0, err
+		}
+	}
+
+	if outputPath == "-" && len(matchPath) == 0 {
+		return 0, fmt.Errorf("cannot extract a directory to stdout, use a path to extract a specific file")
+	}
+
+	subPath := matchPath
+	if len(matchPath) > 0 {
+		subPath = matchPath[1:]
+	}
+
+	extractEntry := func(name string, entry ipld.Node) (int, error) {
+		nextPath := path.Join(outputPath, name)
+		var nextRes string
+		if outputRoot != "" {
+			var err error
+			nextRes, err = resolvePath(outputRoot, nextPath)
+			if err != nil {
+				return 0, err
+			}
+			if verbose {
+				fmt.Fprintf(logger, "%s\n", nextRes)
+			}
+		}
+
+		hashNode, err := entry.LookupByString("hash")
+		if err != nil {
+			return 0, err
+		}
+		link, err := hashNode.AsLink()
+		if err != nil {
+			return 0, err
+		}
+		child, err := ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
+		if err != nil {
+			if nf, ok := err.(interface{ NotFound() bool }); ok && nf.NotFound() {
+				fmt.Fprintf(logger, "data for entry not found: %s (skipping...)\n", nextPath)
+				return 0, nil
+			}
+			return 0, err
+		}
+
+		switch child.Kind() {
+		case ipld.Kind_Bytes:
+			return 1, extractGitBlob(child, nextRes)
+		case ipld.Kind_Map:
+			return extractGitDir(c, ls, child, outputRoot, nextPath, subPath, verbose, logger)
+		default:
+			return 0, fmt.Errorf("unexpected git node kind %s at %s", child.Kind(), nextPath)
+		}
+	}
+
+	if len(matchPath) > 0 {
+		val, err := n.LookupByString(matchPath[0])
+		if err != nil {
+			return 0, err
+		}
+		return extractEntry(matchPath[0], val)
+	}
+
+	var count int
+	mi := n.MapIterator()
+	for !mi.Done() {
+		key, val, err := mi.Next()
+		if err != nil {
+			return 0, err
+		}
+		ks, err := key.AsString()
+		if err != nil {
+			return 0, err
+		}
+		ecount, err := extractEntry(ks, val)
+		if err != nil {
+			return 0, err
+		}
+		count += ecount
+	}
+	return count, nil
+}
+
+// extractGitBlob writes the content of a git blob node to outputName (or
+// stdout when outputName is ""). Git blob bytes include the object header
+// "blob <size>\0", which is stripped before writing.
+func extractGitBlob(n ipld.Node, outputName string) error {
+	b, err := n.AsBytes()
+	if err != nil {
+		return err
+	}
+	// Strip git object header: "blob <size>\0"
+	nullIdx := bytes.IndexByte(b, 0)
+	if nullIdx < 0 {
+		return fmt.Errorf("invalid git blob: missing null byte in header")
+	}
+	content := b[nullIdx+1:]
+
+	var f *os.File
+	if outputName == "" {
+		f = os.Stdout
+	} else {
+		f, err = os.Create(outputName)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+	}
+	_, err = f.Write(content)
 	return err
 }

@@ -93,6 +93,14 @@ stderr -count=1 '^data for entry not found: /zimdump_version \(skipping\.\.\.\)$
 stderr -count=1 '^data for entry not found: /favicon.ico \(skipping\.\.\.\)$'
 stderr -count=1 '^data for entry not found: /index.html \(skipping\.\.\.\)$'
 
+# git-raw CAR extract
+mkdir actual-git-raw
+car extract -f ${INPUTS}/sample-git-raw.car actual-git-raw
+stderr '^extracted 1 file\(s\)$'
+cmp actual-git-raw/baz expected-git-raw/baz
+
+-- expected-git-raw/baz --
+hello
 -- expected/a/1/A.txt --
 a1A
 -- expected/a/2/B.txt --

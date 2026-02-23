@@ -18,7 +18,7 @@ COMMANDS:
    create, c      Create a car file
    debug          debug a car file
    detach-index   Detach an index to a detached file
-   extract, x     Extract the contents of a car when the car encodes UnixFS data
+   extract, x     Extract the contents of a car when the car encodes UnixFS or Git data
    filter, f      Filter the CIDs in a car
    get-block, gb  Get a block out of a car
    get-dag, gd    Get a dag out of a car
