@@ -99,8 +99,46 @@ car extract -f ${INPUTS}/sample-git-raw.car actual-git-raw
 stderr '^extracted 1 file\(s\)$'
 cmp actual-git-raw/baz expected-git-raw/baz
 
+# git-raw CAR rooted at a commit: extracts the commit's tree
+mkdir actual-git-commit
+car extract -f ${INPUTS}/sample-git-commit.car actual-git-commit
+stderr '^extracted 5 file\(s\)$'
+cmp actual-git-commit/file        expected-git-commit/file
+cmp actual-git-commit/dir/f1      expected-git-commit/dir/f1
+cmp actual-git-commit/dir/f4      expected-git-commit/dir/f4
+cmp actual-git-commit/dir/subdir/f2 expected-git-commit/dir/subdir/f2
+cmp actual-git-commit/dir2/f3     expected-git-commit/dir2/f3
+
+# git-raw CAR rooted at a tag pointing to a commit: follows tag then extracts tree
+mkdir actual-git-tag
+car extract -f ${INPUTS}/sample-git-tag.car actual-git-tag
+stderr '^extracted 5 file\(s\)$'
+cmp actual-git-tag/file        expected-git-commit/file
+cmp actual-git-tag/dir/f1      expected-git-commit/dir/f1
+cmp actual-git-tag/dir/f4      expected-git-commit/dir/f4
+cmp actual-git-tag/dir/subdir/f2 expected-git-commit/dir/subdir/f2
+cmp actual-git-tag/dir2/f3     expected-git-commit/dir2/f3
+
+# git-raw CAR rooted at a tag pointing to a blob: extracts the blob as 'unknown'
+mkdir actual-git-tag-blob
+car extract -f ${INPUTS}/sample-git-tag-blob.car actual-git-tag-blob
+stderr '^extracted 1 file\(s\)$'
+cmp actual-git-tag-blob/unknown expected-git-tag-blob/unknown
+
 -- expected-git-raw/baz --
 hello
+-- expected-git-commit/file --
+Hello world
+-- expected-git-commit/dir/f1 --
+qwerty
+-- expected-git-commit/dir/f4 --
+;qjkxb
+-- expected-git-commit/dir/subdir/f2 --
+123456
+-- expected-git-commit/dir2/f3 --
+',.pyf
+-- expected-git-tag-blob/unknown --
+fgcrl
 -- expected/a/1/A.txt --
 a1A
 -- expected/a/2/B.txt --

@@ -56,26 +56,19 @@ func ExtractToDir(c context.Context, ls *ipld.LinkSystem, root cid.Cid, outputDi
 	}
 
 	if root.Prefix().Codec == cid.GitRaw {
-		nd, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: root}, basicnode.Prototype.Any)
-		if err != nil {
-			return 0, err
-		}
 		var outputResolvedDir string
+		var err error
 		if outputDir != "-" {
 			outputResolvedDir, err = filepath.EvalSymlinks(outputDir)
 			if err != nil {
 				return 0, err
 			}
 		}
-		if nd.Kind() == ipld.Kind_Bytes {
-			// Root is a bare git blob; extract it as a single file.
-			var outputName string
-			if outputDir != "-" {
-				outputName = filepath.Join(outputResolvedDir, "unknown")
-			}
-			return 1, extractGitBlob(nd, outputName)
+		var blobName string
+		if outputDir != "-" {
+			blobName = filepath.Join(outputResolvedDir, "unknown")
 		}
-		return extractGitDir(c, ls, nd, outputResolvedDir, "/", path, verbose, logger)
+		return extractGitAnyNode(c, ls, cidlink.Link{Cid: root}, outputResolvedDir, "/", blobName, path, verbose, logger)
 	}
 
 	pbn, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: root}, dagpb.Type.PBNode)
@@ -372,7 +365,7 @@ func extractGitDir(c context.Context, ls *ipld.LinkSystem, n ipld.Node, outputRo
 		if err != nil {
 			return 0, err
 		}
-		child, err := ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
+		cnt, err := extractGitAnyNode(c, ls, link, outputRoot, nextPath, nextRes, subPath, verbose, logger)
 		if err != nil {
 			if nf, ok := err.(interface{ NotFound() bool }); ok && nf.NotFound() {
 				fmt.Fprintf(logger, "data for entry not found: %s (skipping...)\n", nextPath)
@@ -380,15 +373,7 @@ func extractGitDir(c context.Context, ls *ipld.LinkSystem, n ipld.Node, outputRo
 			}
 			return 0, err
 		}
-
-		switch child.Kind() {
-		case ipld.Kind_Bytes:
-			return 1, extractGitBlob(child, nextRes)
-		case ipld.Kind_Map:
-			return extractGitDir(c, ls, child, outputRoot, nextPath, subPath, verbose, logger)
-		default:
-			return 0, fmt.Errorf("unexpected git node kind %s at %s", child.Kind(), nextPath)
-		}
+		return cnt, nil
 	}
 
 	if len(matchPath) > 0 {
@@ -417,6 +402,71 @@ func extractGitDir(c context.Context, ls *ipld.LinkSystem, n ipld.Node, outputRo
 		count += ecount
 	}
 	return count, nil
+}
+
+// gitRawType reads the first bytes of a git-raw block to return its type
+// string: "blob", "tree", "commit", or "tag".
+func gitRawType(ls *ipld.LinkSystem, lnk ipld.Link) (string, error) {
+	r, err := ls.StorageReadOpener(ipld.LinkContext{}, lnk)
+	if err != nil {
+		return "", err
+	}
+	buf := make([]byte, 7) // long enough for "commit " (7 bytes)
+	n, err := r.Read(buf)
+	if n == 0 {
+		return "", fmt.Errorf("reading git object header: %w", err)
+	}
+	raw := buf[:n]
+	for _, t := range []string{"blob", "tree", "commit", "tag"} {
+		prefix := t + " "
+		if len(raw) >= len(prefix) && string(raw[:len(prefix)]) == prefix {
+			return t, nil
+		}
+	}
+	return "", fmt.Errorf("unrecognized git object header: %q", raw)
+}
+
+// extractGitAnyNode dispatches a git-raw link to the right handler by reading
+// the object-type from its raw block header ("blob", "tree", "commit", "tag").
+// blobPath is the output file path for a bare blob (empty = stdout); dirPath
+// is the current relative path within outputRoot when entering a tree.
+func extractGitAnyNode(c context.Context, ls *ipld.LinkSystem, lnk ipld.Link, outputRoot, dirPath, blobPath string, matchPath []string, verbose bool, logger io.Writer) (int, error) {
+	typ, err := gitRawType(ls, lnk)
+	if err != nil {
+		return 0, err
+	}
+	nd, err := ls.Load(ipld.LinkContext{}, lnk, basicnode.Prototype.Any)
+	if err != nil {
+		return 0, err
+	}
+	switch typ {
+	case "blob":
+		return 1, extractGitBlob(nd, blobPath)
+	case "commit":
+		treeNd, err := nd.LookupByString("tree")
+		if err != nil {
+			return 0, err
+		}
+		treeLnk, err := treeNd.AsLink()
+		if err != nil {
+			return 0, err
+		}
+		return extractGitAnyNode(c, ls, treeLnk, outputRoot, dirPath, blobPath, matchPath, verbose, logger)
+	case "tag":
+		objNd, err := nd.LookupByString("object")
+		if err != nil {
+			return 0, err
+		}
+		objLnk, err := objNd.AsLink()
+		if err != nil {
+			return 0, err
+		}
+		return extractGitAnyNode(c, ls, objLnk, outputRoot, dirPath, blobPath, matchPath, verbose, logger)
+	case "tree":
+		return extractGitDir(c, ls, nd, outputRoot, dirPath, matchPath, verbose, logger)
+	default:
+		return 0, fmt.Errorf("unrecognized git object type: %s", typ)
+	}
 }
 
 // extractGitBlob writes the content of a git blob node to outputName (or
