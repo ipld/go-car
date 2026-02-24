@@ -1,5 +1,3 @@
-# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
-
 version: 2
 builds:
   - main: ./car
@@ -12,14 +10,21 @@ builds:
     goarch:
       - 'amd64'
       - 'arm64'
+    mod_timestamp: '{{.CommitTimestamp}}'
+    env:
+      - CGO_ENABLED=0
 universal_binaries:
   - replace: true
 archives:
-  - format_overrides:
-    - goos: windows
-      format: zip
-    - goos: darwin
-      format: zip
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+      - goos: darwin
+        formats:
+          - zip
 release:
   mode: keep-existing
 changelog:
