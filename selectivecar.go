@@ -102,7 +102,7 @@ func (sc SelectiveCar) Prepare(userOnNewCarBlocks ...OnNewCarBlockFunc) (Selecti
 func (sc SelectiveCar) Write(w io.Writer, userOnNewCarBlocks ...OnNewCarBlockFunc) error {
 	onCarHeader := func(h CarHeader) error {
 		if err := WriteHeader(&h, w); err != nil {
-			return fmt.Errorf("failed to write car header: %s", err)
+			return fmt.Errorf("failed to write car header: %w", err)
 		}
 		return nil
 	}
@@ -143,10 +143,10 @@ func (sc SelectiveCarPrepared) Cids() []cid.Cid {
 func (sc SelectiveCarPrepared) Dump(ctx context.Context, w io.Writer) error {
 	offset, err := HeaderSize(&sc.header)
 	if err != nil {
-		return fmt.Errorf("failed to size car header: %s", err)
+		return fmt.Errorf("failed to size car header: %w", err)
 	}
 	if err := WriteHeader(&sc.header, w); err != nil {
-		return fmt.Errorf("failed to write car header: %s", err)
+		return fmt.Errorf("failed to write car header: %w", err)
 	}
 	for _, c := range sc.cids {
 		blk, err := sc.store.Get(ctx, c)

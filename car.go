@@ -53,7 +53,7 @@ func WriteCarWithWalker(ctx context.Context, ds format.NodeGetter, roots []cid.C
 	}
 
 	if err := WriteHeader(h, w); err != nil {
-		return fmt.Errorf("failed to write car header: %s", err)
+		return fmt.Errorf("failed to write car header: %w", err)
 	}
 
 	cw := &carWriter{ds: ds, w: w, walk: walk}
