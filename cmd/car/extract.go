@@ -22,18 +22,22 @@ var ErrNotDir = fmt.Errorf("not a directory")
 
 // ExtractCar pulls files and directories out of a car
 func ExtractCar(c *cli.Context) error {
+	if !c.IsSet("file") {
+		return fmt.Errorf("a file source must be specified")
+	}
+
 	outputDir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if c.Args().Present() {
-		outputDir = c.Args().First()
+	if c.IsSet("output") {
+		outputDir = c.String("output")
 	}
 
 	var store storage.ReadableStorage
 	var roots []cid.Cid
 
-	if c.String("file") == "" {
+	if c.String("file") == "-" {
 		if f, ok := c.App.Reader.(*os.File); ok {
 			stat, err := f.Stat()
 			if err != nil {
@@ -71,19 +75,28 @@ func ExtractCar(c *cli.Context) error {
 	ls.TrustedStorage = true
 	ls.SetReadStorage(store)
 
-	path, err := pathSegments(c.String("path"))
-	if err != nil {
-		return err
+	paths := c.Args().Slice()
+	if len(paths) == 0 {
+		paths = append(paths, "")
 	}
 
 	var extractedFiles int
-	for _, root := range roots {
-		count, err := lib.ExtractToDir(c.Context, &ls, root, outputDir, path, c.IsSet("verbose"), c.App.ErrWriter)
+
+	for _, p := range paths {
+		path, err := pathSegments(p)
 		if err != nil {
 			return err
 		}
-		extractedFiles += count
+
+		for _, root := range roots {
+			count, err := lib.ExtractToDir(c.Context, &ls, root, outputDir, path, c.IsSet("verbose"), c.App.ErrWriter)
+			if err != nil {
+				return err
+			}
+			extractedFiles += count
+		}
 	}
+
 	if extractedFiles == 0 {
 		return cli.Exit("no files extracted", 1)
 	} else {
