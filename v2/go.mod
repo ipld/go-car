@@ -1,6 +1,6 @@
 module github.com/ipld/go-car/v2
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/ipfs/go-block-format v0.2.3
@@ -9,7 +9,7 @@ require (
 	github.com/ipfs/go-ipld-format v0.6.3
 	github.com/ipfs/go-unixfsnode v1.10.3
 	github.com/ipld/go-codec-dagpb v1.7.0
-	github.com/ipld/go-ipld-prime v0.22.0
+	github.com/ipld/go-ipld-prime v0.23.0
 	github.com/ipld/go-ipld-prime/storage/bsadapter v0.0.0-20250821084354-a425e60cd714
 	github.com/multiformats/go-multicodec v0.10.0
 	github.com/multiformats/go-multihash v0.2.3
