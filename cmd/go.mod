@@ -1,6 +1,6 @@
 module github.com/ipld/go-car/cmd
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/dustin/go-humanize v1.0.1
@@ -11,7 +11,7 @@ require (
 	github.com/ipld/go-car v0.6.3
 	github.com/ipld/go-car/v2 v2.16.0
 	github.com/ipld/go-codec-dagpb v1.7.0
-	github.com/ipld/go-ipld-prime v0.22.0
+	github.com/ipld/go-ipld-prime v0.23.0
 	github.com/multiformats/go-multicodec v0.10.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.1.0
