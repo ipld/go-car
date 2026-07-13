@@ -6,7 +6,7 @@ require (
 	github.com/ipfs/boxo v0.41.0
 	github.com/ipfs/go-block-format v0.2.4
 	github.com/ipfs/go-cid v0.6.2
-	github.com/ipfs/go-ipld-cbor v0.2.1
+	github.com/ipfs/go-ipld-cbor v0.3.0
 	github.com/ipfs/go-ipld-format v0.6.4
 	github.com/ipld/go-codec-dagpb v1.7.0
 	github.com/ipld/go-ipld-prime v0.24.0
