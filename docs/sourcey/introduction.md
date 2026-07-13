@@ -22,5 +22,5 @@ New applications should normally begin with the **v2 API** tab. Read
 **Choosing a version** before changing an existing integration, because the v1
 and v2 module paths and APIs are intentionally distinct.
 
-The canonical source, issue tracker, security history, and release notes remain
-in the [upstream repository](https://github.com/ipld/go-car).
+The canonical source, issue tracker, change history, and release notes remain in
+the [upstream repository](https://github.com/ipld/go-car).

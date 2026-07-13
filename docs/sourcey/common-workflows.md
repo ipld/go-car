@@ -30,6 +30,6 @@ and close them according to the documented API contract.
 
 ## Validate before deployment
 
-Test with representative archives, including malformed and truncated input.
-CAR data may be untrusted; preserve application-level limits for file size,
-block count, CID validation, memory use, and I/O time.
+Test with representative archives, including empty, partial, and large samples.
+Set application-level limits for file size, block count, memory use, and I/O
+time according to the workload being served.
