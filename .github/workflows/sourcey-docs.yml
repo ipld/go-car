@@ -1,0 +1,72 @@
+name: Sourcey Docs
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/sourcey-docs.yml'
+      - 'docs/sourcey/**'
+      - '**/*.go'
+      - 'go.mod'
+      - 'v2/go.mod'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/sourcey-docs.yml'
+      - 'docs/sourcey/**'
+      - '**/*.go'
+      - 'go.mod'
+      - 'v2/go.mod'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sourcey-docs-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: docs/sourcey/package-lock.json
+      - name: Install pinned dependencies
+        run: npm ci
+        working-directory: docs/sourcey
+      - name: Build Sourcey site
+        run: npm run build
+        working-directory: docs/sourcey
+      - name: Upload documentation artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/sourcey/dist
+
+  deploy:
+    name: Deploy documentation
+    if: github.event_name != 'pull_request'
+    needs: build
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,10 @@
+{
+  "name": "go-car-sourcey-docs",
+  "private": true,
+  "scripts": {
+    "build": "sourcey build"
+  },
+  "dependencies": {
+    "sourcey": "3.6.5"
+  }
+}
