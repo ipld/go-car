@@ -9,9 +9,6 @@ updates:
       interval: "monthly"
     cooldown:
       default-days: 5
-    groups:
-      shared-dependencies:
-        group-by: "dependency-name"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
