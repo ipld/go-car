@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/ipfs/go-cid"
@@ -32,7 +33,7 @@ func ListCar(c *cli.Context) error {
 	}
 	defer outStream.Close()
 
-	if c.Bool("unixfs") || c.Bool("unixfs-blocks") {
+	if c.Bool("unixfs") {
 		return listUnixfs(c, outStream)
 	}
 
@@ -59,9 +60,12 @@ func ListCar(c *cli.Context) error {
 			return err
 		}
 		if c.Bool("verbose") {
-			fmt.Fprintf(outStream, "%s: %s\n",
-				multicodec.Code(blk.Cid().Prefix().Codec).String(),
-				blk.Cid())
+			fmt.Fprintf(outStream, "%s", multicodec.Code(blk.Cid().Prefix().Codec).String())
+			if c.Bool("cids") {
+				fmt.Fprintf(outStream, ": %s", blk.Cid())
+			}
+			fmt.Fprintln(outStream)
+
 			if blk.Cid().Prefix().Codec == uint64(multicodec.DagPb) {
 				// parse as dag-pb
 				builder := dagpb.Type.PBNode.NewBuilder()
@@ -87,20 +91,33 @@ func ListCar(c *cli.Context) error {
 					max--
 					pbl, ok := l.(dagpb.PBLink)
 					if ok && max >= 0 {
-						hsh := "<unknown>"
-						lnk, ok := pbl.Hash.Link().(cidlink.Link)
-						if ok {
-							hsh = lnk.Cid.String()
-						}
 						name := "<no name>"
 						if pbl.Name.Exists() {
 							name = pbl.Name.Must().String()
 						}
-						size := 0
+						fmt.Fprintf(outStream, "\t\t%s", name)
+
+						size := uint64(0)
 						if pbl.Tsize.Exists() {
-							size = int(pbl.Tsize.Must().Int())
+							size = uint64(pbl.Tsize.Must().Int())
 						}
-						fmt.Fprintf(outStream, "\t\t%s[%s] %s\n", name, humanize.Bytes(uint64(size)), hsh)
+						sizePart := sizeStr(c, size)
+						if sizePart != "" {
+							fmt.Fprintf(outStream, "%s", sizePart)
+						}
+
+						if c.Bool("cids") {
+							hsh := "<unknown>"
+
+							lnk, ok := pbl.Hash.Link().(cidlink.Link)
+							if ok {
+								hsh = lnk.Cid.String()
+							}
+
+							fmt.Fprintf(outStream, " %s", hsh)
+						}
+
+						fmt.Fprintln(outStream)
 					}
 				}
 				if max < 0 {
@@ -115,7 +132,7 @@ func ListCar(c *cli.Context) error {
 				fmt.Fprintf(outStream, "\tUnixfs %s\n", data.DataTypeNames[ufd.FieldDataType().Int()])
 			}
 		} else {
-			fmt.Fprintf(outStream, "%s\n", blk.Cid())
+			printEntry(c, blk.Cid(), "", uint64(len(blk.RawData())), outStream)
 		}
 	}
 
@@ -150,83 +167,166 @@ func listUnixfs(c *cli.Context, outStream io.Writer) error {
 		return err
 	}
 	for _, r := range roots {
-		if err := printUnixFSNode(c, "", r, &ls, outStream); err != nil {
+		if _, err := printUnixFSNode(c, "", r, &ls, outStream); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkSystem, outStream io.Writer) error {
-	// it might be a raw file (bytes) node. if so, not actually an error.
+func printUnixFSNode(c *cli.Context, prefix string, node cid.Cid, ls *ipld.LinkSystem, outStream io.Writer) (uint64, error) {
 	if node.Prefix().Codec == cid.Raw {
-		return nil
+		link := cidlink.Link{Cid: node}
+
+		rawBytes, err := ls.LoadRaw(
+			ipld.LinkContext{Ctx: c.Context},
+			link,
+		)
+
+		if err != nil {
+			return 0, err
+		}
+
+		return uint64(len(rawBytes)), nil
 	}
 
 	pbn, err := ls.Load(ipld.LinkContext{}, cidlink.Link{Cid: node}, dagpb.Type.PBNode)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	pbnode := pbn.(dagpb.PBNode)
 
 	ufd, err := data.DecodeUnixFSData(pbnode.Data.Must().Bytes())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	if ufd.FieldDataType().Int() == data.Data_Directory {
+	var totalSize uint64 = 0
+
+	switch ufd.FieldDataType().Int() {
+
+	case data.Data_Directory:
 		i := pbnode.Links.Iterator()
 		for !i.Done() {
-			_, l := i.Next()
-			name := path.Join(prefix, l.Name.Must().String())
-			if c.Bool("unixfs-blocks") {
-				cidL, _ := l.Hash.AsLink()
-				fmt.Fprintf(outStream, "%s %s\n", cidL.(cidlink.Link).Cid, name)
-			} else {
-				fmt.Fprintf(outStream, "%s\n", name)
-			}
-			// recurse into the file/directory
-			cl, err := l.Hash.AsLink()
-			if err != nil {
-				return err
-			}
-			if cidl, ok := cl.(cidlink.Link); ok {
-				if err := printUnixFSNode(c, name, cidl.Cid, ls, outStream); err != nil {
-					return err
-				}
+			_, link := i.Next()
+			name := link.Name.Must().String()
+			if name == "" {
+				continue
 			}
 
+			chPath := path.Join(prefix, name)
+
+			chLink, err := link.Hash.AsLink()
+			if err != nil {
+				return 0, err
+			}
+
+			chCid := chLink.(cidlink.Link).Cid
+
+			chSize, err := printUnixFSNode(c, chPath, chCid, ls, outStream)
+			if err != nil {
+				return 0, err
+			}
+
+			totalSize += chSize
+
+			printEntry(c, chCid, chPath, chSize, outStream)
 		}
-	} else if ufd.FieldDataType().Int() == data.Data_HAMTShard {
+
+	case data.Data_HAMTShard:
 		hn, err := hamt.AttemptHAMTShardFromNode(c.Context, pbn, ls)
 		if err != nil {
-			return err
+			return 0, err
 		}
+
 		i := hn.Iterator()
 		for !i.Done() {
-			n, l := i.Next()
-			if c.Bool("unixfs-blocks") {
-				cl, _ := l.AsLink()
-				fmt.Fprintf(outStream, "%s %s\n", cl.(cidlink.Link).Cid, path.Join(prefix, n.String()))
-			} else {
-				fmt.Fprintf(outStream, "%s\n", path.Join(prefix, n.String()))
-			}
-			// recurse into the file/directory
-			cl, err := l.AsLink()
+			key, val := i.Next()
+
+			chPath := path.Join(prefix, key.String())
+
+			chLink, err := val.AsLink()
 			if err != nil {
-				return err
+				return 0, err
 			}
-			if cidl, ok := cl.(cidlink.Link); ok {
-				if err := printUnixFSNode(c, path.Join(prefix, n.String()), cidl.Cid, ls, outStream); err != nil {
-					return err
-				}
+
+			chCid := chLink.(cidlink.Link).Cid
+
+			chSize, err := printUnixFSNode(c, chPath, chCid, ls, outStream)
+			if err != nil {
+				return 0, err
 			}
+
+			totalSize += chSize
+
+			printEntry(c, chCid, chPath, chSize, outStream)
 		}
-	} else {
-		// file, file chunk, symlink, other un-named entities.
-		return nil
+
+	case data.Data_File:
+		size := uint64(0)
+		if ufd.FieldFileSize().Exists() {
+			size = uint64(ufd.FieldFileSize().Must().Int())
+		}
+
+		return size, nil
+
+	case data.Data_Raw:
+		size := uint64(0)
+		if ufd.FieldData().Exists() {
+			size = uint64(len(ufd.FieldData().Must().Bytes()))
+		}
+
+		return size, nil
+
+	default:
+		return 0, nil
 	}
 
-	return nil
+	return totalSize, nil
+}
+
+func printEntry(c *cli.Context, cid cid.Cid, path string, size uint64, outStream io.Writer) {
+	parts := make([]string, 0, 3)
+
+	if path != "" {
+		// For unixfs only show CIDs if explicitly requested
+		if c.IsSet("cids") && c.Bool("cids") {
+			parts = append(parts, cid.String())
+		}
+
+		parts = append(parts, path)
+	} else if c.Bool("cids") {
+		parts = append(parts, cid.String())
+	}
+
+	sizePart := sizeStr(c, size)
+	if sizePart != "" {
+		parts = append(parts, sizePart)
+	}
+
+	if len(parts) == 0 {
+		return
+	}
+
+	fmt.Fprintln(outStream, strings.Join(parts, " "))
+}
+
+func sizeStr(c *cli.Context, size uint64) string {
+	mode := ""
+
+	if c.IsSet("sizes") {
+		mode = c.String("sizes")
+	} else if c.Bool("verbose") {
+		mode = "human"
+	}
+
+	switch mode {
+	case "human":
+		return fmt.Sprintf("[%s]", humanize.Bytes(uint64(size)))
+	case "bytes":
+		return fmt.Sprintf("[%d]", size)
+	}
+
+	return ""
 }
