@@ -45,7 +45,7 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 	o := ApplyOptions(opts...)
 
 	reader := internalio.ToByteReadSeeker(r)
-	pragma, err := carv1.ReadHeader(r, o.MaxAllowedHeaderSize)
+	pragma, err := carv1.ReadHeader(reader, o.MaxAllowedHeaderSize)
 	if err != nil {
 		return fmt.Errorf("error reading car header: %w", err)
 	}
@@ -57,7 +57,7 @@ func LoadIndex(idx index.Index, r io.Reader, opts ...Option) error {
 	case 2:
 		// Read V2 header which should appear immediately after pragma according to CARv2 spec.
 		var v2h Header
-		_, err := v2h.ReadFrom(r)
+		_, err := v2h.ReadFrom(reader)
 		if err != nil {
 			return err
 		}

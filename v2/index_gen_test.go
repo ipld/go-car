@@ -1,9 +1,12 @@
 package car_test
 
 import (
+	"bufio"
+	"bytes"
 	"io"
 	"os"
 	"testing"
+	"testing/iotest"
 
 	"github.com/stretchr/testify/assert"
 
@@ -94,7 +97,7 @@ func TestGenerateIndex(t *testing.T) {
 		},
 	}
 
-	requireWant := func(tt testCase, got index.Index, gotErr error) {
+	requireWant := func(t *testing.T, tt testCase, got index.Index, gotErr error) {
 		if tt.wantErr {
 			require.Error(t, gotErr)
 		} else {
@@ -117,26 +120,37 @@ func TestGenerateIndex(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { assert.NoError(t, carFile.Close()) })
 			got, gotErr := carv2.ReadOrGenerateIndex(carFile, tt.opts...)
-			requireWant(tt, got, gotErr)
+			requireWant(t, tt, got, gotErr)
 		})
 		t.Run("GenerateIndexFromFile_"+tt.name, func(t *testing.T) {
 			got, gotErr := carv2.GenerateIndexFromFile(tt.carPath, tt.opts...)
-			requireWant(tt, got, gotErr)
+			requireWant(t, tt, got, gotErr)
 		})
-		t.Run("LoadIndex_"+tt.name, func(t *testing.T) {
-			carFile, err := os.Open(tt.carPath)
-			require.NoError(t, err)
-			got, err := index.New(multicodec.CarMultihashIndexSorted)
-			require.NoError(t, err)
-			gotErr := carv2.LoadIndex(got, carFile, tt.opts...)
-			requireWant(tt, got, gotErr)
-		})
-		t.Run("GenerateIndex_"+tt.name, func(t *testing.T) {
-			carFile, err := os.Open(tt.carPath)
-			require.NoError(t, err)
-			got, gotErr := carv2.GenerateIndex(carFile, tt.opts...)
-			requireWant(tt, got, gotErr)
-		})
+		for _, readerType := range []struct {
+			name      string
+			newReader func([]byte) io.Reader
+		}{
+			{"Seekable", func(b []byte) io.Reader { return bytes.NewReader(b) }},
+			{"Buffer", func(b []byte) io.Reader { return bytes.NewBuffer(b) }},
+			{"Buffered", func(b []byte) io.Reader { return bufio.NewReader(bytes.NewReader(b)) }},
+			{"Limited", func(b []byte) io.Reader { return io.LimitReader(bytes.NewReader(b), int64(len(b))) }},
+			{"OneByte", func(b []byte) io.Reader { return iotest.OneByteReader(bytes.NewReader(b)) }},
+		} {
+			t.Run("LoadIndex_"+tt.name+"/"+readerType.name, func(t *testing.T) {
+				data, err := os.ReadFile(tt.carPath)
+				require.NoError(t, err)
+				got, err := index.New(multicodec.CarMultihashIndexSorted)
+				require.NoError(t, err)
+				gotErr := carv2.LoadIndex(got, readerType.newReader(data), tt.opts...)
+				requireWant(t, tt, got, gotErr)
+			})
+			t.Run("GenerateIndex_"+tt.name+"/"+readerType.name, func(t *testing.T) {
+				data, err := os.ReadFile(tt.carPath)
+				require.NoError(t, err)
+				got, gotErr := carv2.GenerateIndex(readerType.newReader(data), tt.opts...)
+				requireWant(t, tt, got, gotErr)
+			})
+		}
 	}
 }
 
